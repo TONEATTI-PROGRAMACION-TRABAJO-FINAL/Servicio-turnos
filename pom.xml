@@ -28,6 +28,10 @@
     </scm>
     <properties>
         <java.version>25</java.version>
+        <jacoco.version>0.8.15</jacoco.version>
+        <sonar.organization>toneatti-programacion-trabajo-final</sonar.organization>
+        <sonar.projectKey>TONEATTI-PROGRAMACION-TRABAJO-FINAL_Servicio-turnos</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     </properties>
     <dependencies>
         <dependency>
@@ -102,6 +106,26 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
