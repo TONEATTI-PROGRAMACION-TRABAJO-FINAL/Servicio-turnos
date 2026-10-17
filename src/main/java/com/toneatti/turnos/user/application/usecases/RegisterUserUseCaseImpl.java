@@ -21,19 +21,19 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
     @Override
     public User registerUser(User user, String rawPassword) {
-        String email = user.getEmail().trim().toLowerCase(Locale.ROOT);
+        String email = user.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyRegisteredException(email);
         }
-        User newUser = User.builder()
+        User newUser = new User(
+                null,
                 // Sent to the cátedra as externalPatientId: must never change.
-                .externalId(UUID.randomUUID().toString())
-                .email(email)
-                .passwordHash(passwordHasher.hash(rawPassword))
-                .firstName(user.getFirstName().trim())
-                .lastName(user.getLastName().trim())
-                .createdAt(Instant.now())
-                .build();
+                UUID.randomUUID().toString(),
+                email,
+                passwordHasher.hash(rawPassword),
+                user.firstName().trim(),
+                user.lastName().trim(),
+                Instant.now());
         return userRepository.create(newUser);
     }
 

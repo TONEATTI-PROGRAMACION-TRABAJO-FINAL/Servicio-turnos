@@ -30,24 +30,23 @@ class UserDtoMapperTest {
 
         User user = userDtoMapper.toDomain(request);
 
-        assertThat(user.getEmail()).isEqualTo("juan@example.com");
-        assertThat(user.getFirstName()).isEqualTo("Juan");
-        assertThat(user.getLastName()).isEqualTo("Perez");
-        assertThat(user.getPasswordHash()).isNull();
-        assertThat(user.getExternalId()).isNull();
+        assertThat(user.email()).isEqualTo("juan@example.com");
+        assertThat(user.firstName()).isEqualTo("Juan");
+        assertThat(user.lastName()).isEqualTo("Perez");
+        assertThat(user.passwordHash()).isNull();
+        assertThat(user.externalId()).isNull();
     }
 
     @Test
     void toResponseExposesOnlyPublicFields() {
-        User user = User.builder()
-                .id(7L)
-                .externalId("3f1c2b8e-0000-4000-8000-000000000001")
-                .email("juan@example.com")
-                .passwordHash("hashed-password")
-                .firstName("Juan")
-                .lastName("Perez")
-                .createdAt(Instant.parse("2026-09-10T14:30:00Z"))
-                .build();
+        User user = new User(
+                7L,
+                "3f1c2b8e-0000-4000-8000-000000000001",
+                "juan@example.com",
+                "hashed-password",
+                "Juan",
+                "Perez",
+                Instant.parse("2026-09-10T14:30:00Z"));
 
         UserResponse response = userDtoMapper.toResponse(user);
 

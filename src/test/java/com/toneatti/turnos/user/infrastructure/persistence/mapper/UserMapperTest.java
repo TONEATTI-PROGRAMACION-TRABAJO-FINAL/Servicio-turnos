@@ -20,15 +20,14 @@ class UserMapperTest {
 
     @Test
     void mapsEveryFieldBothWays() {
-        User user = User.builder()
-                .id(7L)
-                .externalId("3f1c2b8e-0000-4000-8000-000000000001")
-                .email("juan@example.com")
-                .passwordHash("hashed-password")
-                .firstName("Juan")
-                .lastName("Perez")
-                .createdAt(Instant.parse("2026-09-10T14:30:00Z"))
-                .build();
+        User user = new User(
+                7L,
+                "3f1c2b8e-0000-4000-8000-000000000001",
+                "juan@example.com",
+                "hashed-password",
+                "Juan",
+                "Perez",
+                Instant.parse("2026-09-10T14:30:00Z"));
 
         UserEntity entity = userMapper.toEntity(user);
         User mappedBack = userMapper.toDomainModel(entity);

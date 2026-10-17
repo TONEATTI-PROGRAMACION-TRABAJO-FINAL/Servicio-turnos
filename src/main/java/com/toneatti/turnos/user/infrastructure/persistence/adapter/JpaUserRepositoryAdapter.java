@@ -25,8 +25,8 @@ public class JpaUserRepositoryAdapter implements UserRepository {
             return userMapper.toDomainModel(savedEntity);
         } catch (DataIntegrityViolationException e) {
             // Two concurrent registrations can both pass the existsByEmail check; the unique constraint decides.
-            if (jpaUserRepository.existsByEmail(user.getEmail())) {
-                throw new EmailAlreadyRegisteredException(user.getEmail());
+            if (jpaUserRepository.existsByEmail(user.email())) {
+                throw new EmailAlreadyRegisteredException(user.email());
             }
             throw e;
         }

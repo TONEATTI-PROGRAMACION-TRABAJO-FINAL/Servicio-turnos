@@ -12,13 +12,13 @@ public class UserMapper {
             return null;
         }
         return UserEntity.builder()
-                .id(user.getId())
-                .externalId(user.getExternalId())
-                .email(user.getEmail())
-                .passwordHash(user.getPasswordHash())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .createdAt(user.getCreatedAt())
+                .id(user.id())
+                .externalId(user.externalId())
+                .email(user.email())
+                .passwordHash(user.passwordHash())
+                .firstName(user.firstName())
+                .lastName(user.lastName())
+                .createdAt(user.createdAt())
                 .build();
     }
 
@@ -26,14 +26,13 @@ public class UserMapper {
         if (entity == null) {
             return null;
         }
-        return User.builder()
-                .id(entity.getId())
-                .externalId(entity.getExternalId())
-                .email(entity.getEmail())
-                .passwordHash(entity.getPasswordHash())
-                .firstName(entity.getFirstName())
-                .lastName(entity.getLastName())
-                .createdAt(entity.getCreatedAt())
-                .build();
+        return new User(
+                entity.getId(),
+                entity.getExternalId(),
+                entity.getEmail(),
+                entity.getPasswordHash(),
+                entity.getFirstName(),
+                entity.getLastName(),
+                entity.getCreatedAt());
     }
 }

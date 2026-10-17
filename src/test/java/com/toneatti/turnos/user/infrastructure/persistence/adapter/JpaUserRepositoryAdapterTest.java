@@ -25,7 +25,7 @@ class JpaUserRepositoryAdapterTest {
         return new JpaUserRepositoryAdapter(jpaUserRepository, new UserMapper());
     }
 
-    private final User user = User.builder().email("juan@example.com").build();
+    private final User user = new User(null, null, "juan@example.com", null, null, null, null);
 
     @Test
     void translatesAUniqueViolationOnTheEmailIntoEmailAlreadyRegistered() {

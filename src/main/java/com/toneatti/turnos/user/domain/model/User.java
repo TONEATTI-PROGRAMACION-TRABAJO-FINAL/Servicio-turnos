@@ -1,20 +1,21 @@
 package com.toneatti.turnos.user.domain.model;
 
-import lombok.*;
-
 import java.time.Instant;
 
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class User {
-    private Long id;
-    private String externalId;
-    private String email;
-    private String passwordHash;
-    private String firstName;
-    private String lastName;
-    private Instant createdAt;
+public record User(
+        Long id,
+        String externalId,
+        String email,
+        String passwordHash,
+        String firstName,
+        String lastName,
+        Instant createdAt
+) {
+
+    // The generated toString would expose the password hash in logs.
+    @Override
+    public String toString() {
+        return "User[id=" + id + ", externalId=" + externalId + ", email=" + email
+                + ", firstName=" + firstName + ", lastName=" + lastName + ", createdAt=" + createdAt + "]";
+    }
 }

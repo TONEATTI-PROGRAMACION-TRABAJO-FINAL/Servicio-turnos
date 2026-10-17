@@ -13,11 +13,7 @@ public class UserDtoMapper {
         if (request == null) {
             return null;
         }
-        return User.builder()
-                .email(request.getEmail())
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .build();
+        return new User(null, null, request.getEmail(), null, request.getFirstName(), request.getLastName(), null);
     }
 
     public UserResponse toResponse(User domain) {
@@ -25,10 +21,10 @@ public class UserDtoMapper {
             return null;
         }
         return UserResponse.builder()
-                .externalId(domain.getExternalId())
-                .email(domain.getEmail())
-                .firstName(domain.getFirstName())
-                .lastName(domain.getLastName())
+                .externalId(domain.externalId())
+                .email(domain.email())
+                .firstName(domain.firstName())
+                .lastName(domain.lastName())
                 .build();
     }
 }

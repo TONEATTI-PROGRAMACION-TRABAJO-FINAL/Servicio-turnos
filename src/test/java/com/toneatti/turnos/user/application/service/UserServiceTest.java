@@ -22,8 +22,8 @@ class UserServiceTest {
 
     @Test
     void registerUserDelegatesToTheUseCase() {
-        User request = User.builder().email("juan@example.com").build();
-        User registered = User.builder().externalId("external-id").email("juan@example.com").build();
+        User request = new User(null, null, "juan@example.com", null, null, null, null);
+        User registered = new User(null, "external-id", "juan@example.com", null, null, null, null);
         when(registerUserUseCase.registerUser(request, "secret-password")).thenReturn(registered);
 
         assertThat(userService.registerUser(request, "secret-password")).isSameAs(registered);

@@ -36,11 +36,8 @@ class RegisterUserUseCaseImplTest {
     @InjectMocks
     private RegisterUserUseCaseImpl registerUserUseCase;
 
-    private final User request = User.builder()
-            .email("  Juan.Perez@Example.COM ")
-            .firstName(" Juan ")
-            .lastName(" Perez ")
-            .build();
+    private final User request =
+            new User(null, null, "  Juan.Perez@Example.COM ", null, " Juan ", " Perez ", null);
 
     @Test
     void storesTheHashAndNeverTheRawPassword() {
@@ -48,7 +45,7 @@ class RegisterUserUseCaseImplTest {
 
         User created = registerUserUseCase.registerUser(request, "secret-password");
 
-        assertThat(created.getPasswordHash()).isEqualTo("hashed-password");
+        assertThat(created.passwordHash()).isEqualTo("hashed-password");
     }
 
     @Test
@@ -57,9 +54,9 @@ class RegisterUserUseCaseImplTest {
 
         User created = registerUserUseCase.registerUser(request, "secret-password");
 
-        assertThat(created.getEmail()).isEqualTo(NORMALIZED_EMAIL);
-        assertThat(created.getFirstName()).isEqualTo("Juan");
-        assertThat(created.getLastName()).isEqualTo("Perez");
+        assertThat(created.email()).isEqualTo(NORMALIZED_EMAIL);
+        assertThat(created.firstName()).isEqualTo("Juan");
+        assertThat(created.lastName()).isEqualTo("Perez");
     }
 
     @Test
@@ -68,10 +65,10 @@ class RegisterUserUseCaseImplTest {
 
         User created = registerUserUseCase.registerUser(request, "secret-password");
 
-        assertThat(UUID.fromString(created.getExternalId())).isNotNull();
-        assertThat(created.getExternalId()).hasSizeLessThanOrEqualTo(100);
-        assertThat(created.getCreatedAt()).isNotNull();
-        assertThat(created.getId()).isNull();
+        assertThat(UUID.fromString(created.externalId())).isNotNull();
+        assertThat(created.externalId()).hasSizeLessThanOrEqualTo(100);
+        assertThat(created.createdAt()).isNotNull();
+        assertThat(created.id()).isNull();
     }
 
     @Test
@@ -83,8 +80,8 @@ class RegisterUserUseCaseImplTest {
         registerUserUseCase.registerUser(request, "secret-password");
 
         verify(userRepository, times(2)).create(captor.capture());
-        assertThat(captor.getAllValues().get(0).getExternalId())
-                .isNotEqualTo(captor.getAllValues().get(1).getExternalId());
+        assertThat(captor.getAllValues().get(0).externalId())
+                .isNotEqualTo(captor.getAllValues().get(1).externalId());
     }
 
     @Test
