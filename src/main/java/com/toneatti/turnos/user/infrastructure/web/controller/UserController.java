@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Objects;
+
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -23,6 +25,8 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserResponse> registerUser(@Valid @RequestBody UserRequest userRequest) {
+        // @RequestBody is required: Spring answers 400 before reaching here if the body is missing.
+        Objects.requireNonNull(userRequest, "userRequest");
         User user = userDtoMapper.toDomain(userRequest);
         try {
             User registeredUser = userService.registerUser(user, userRequest.getPassword());
