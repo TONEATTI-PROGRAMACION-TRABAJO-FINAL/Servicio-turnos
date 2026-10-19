@@ -11,6 +11,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Instant;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -44,5 +48,36 @@ class JpaUserRepositoryAdapterTest {
         when(jpaUserRepository.existsByEmail("juan@example.com")).thenReturn(false);
 
         assertThatThrownBy(() -> adapter().create(user)).isSameAs(violation);
+    }
+
+    @Test
+    void findByEmailMapsTheStoredUser() {
+        when(jpaUserRepository.findByEmail("juan@example.com")).thenReturn(Optional.of(storedEntity()));
+
+        assertThat(adapter().findByEmail("juan@example.com"))
+                .hasValueSatisfying(found -> {
+                    assertThat(found.id()).isEqualTo(7L);
+                    assertThat(found.externalId()).isEqualTo("3f1c2b8e-0000-4000-8000-000000000001");
+                    assertThat(found.passwordHash()).isEqualTo("hashed-password");
+                });
+    }
+
+    @Test
+    void findByEmailReturnsEmptyWhenThereIsNoUser() {
+        when(jpaUserRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+
+        assertThat(adapter().findByEmail("nobody@example.com")).isEmpty();
+    }
+
+    private static UserEntity storedEntity() {
+        return UserEntity.builder()
+                .id(7L)
+                .externalId("3f1c2b8e-0000-4000-8000-000000000001")
+                .email("juan@example.com")
+                .passwordHash("hashed-password")
+                .firstName("Juan")
+                .lastName("Perez")
+                .createdAt(Instant.parse("2026-09-10T14:30:00Z"))
+                .build();
     }
 }
