@@ -1,5 +1,6 @@
 package com.toneatti.turnos.config;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * The cátedra technical JWT is never part of this chain; it is only sent to the cátedra.
  */
 @Configuration
+@EnableConfigurationProperties(UserJwtProperties.class)
 public class SecurityConfig {
 
     @Bean

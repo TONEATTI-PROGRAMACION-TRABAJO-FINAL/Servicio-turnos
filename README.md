@@ -22,10 +22,12 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | `catedra.kafka.appointment-actions-topic` | `integration.kafkaAppointmentActionsTopic` |
 | `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` | `catedra.kafka.appointment-phone-topic` | `integration.kafkaAppointmentPhoneTopic` |
 | `CATALOGO_BASE_URL` | `catalogo.base-url` | URL base de Servicio-catalogo |
+| `USER_JWT_SECRET` | `user.jwt.secret` | Secreto propio para firmar los JWT de los usuarios (HS256, mínimo 32 bytes). Se genera, por ejemplo, con `openssl rand -base64 48` |
+| `USER_JWT_EXPIRATION` | `user.jwt.expiration` | Opcional. Vigencia del JWT de usuario en formato ISO-8601; por defecto `PT24H` |
 
 Los campos `integration.*` los devuelven `POST /api/student/register`, `POST /api/authenticate` y `GET /api/student/integration`.
 
-Todas son obligatorias. Si falta alguna, la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
+Todas son obligatorias salvo `USER_JWT_EXPIRATION`. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
 
 ### Pasos
 
@@ -40,7 +42,7 @@ Todas son obligatorias. Si falta alguna, la aplicación no arranca y muestra `AP
    ```
    En IntelliJ también se pueden cargar desde *Run Configuration → Environment variables*.
 
-El archivo `.env` contiene secretos (JWT técnico): **nunca se commitea**, ni se pega en capturas, issues o logs.
+El archivo `.env` contiene secretos (JWT técnico y secreto del JWT de usuario): **nunca se commitea**, ni se pega en capturas, issues o logs.
 
 ### Tests
 
