@@ -43,4 +43,9 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     public Optional<User> findByEmail(String email) {
         return jpaUserRepository.findByEmail(email).map(userMapper::toDomainModel);
     }
+
+    @Override
+    public Optional<User> findByExternalId(String externalId) {
+        return jpaUserRepository.findByExternalId(externalId).map(userMapper::toDomainModel);
+    }
 }

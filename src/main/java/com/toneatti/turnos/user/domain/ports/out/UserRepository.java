@@ -9,5 +9,6 @@ public interface UserRepository {
     User create(User user);
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
+    Optional<User> findByExternalId(String externalId);
 
 }

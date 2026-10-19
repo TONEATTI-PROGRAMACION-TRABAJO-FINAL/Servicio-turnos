@@ -3,6 +3,7 @@ package com.toneatti.turnos.user.application.service;
 import com.toneatti.turnos.user.application.exception.UserException;
 import com.toneatti.turnos.user.domain.model.AccessToken;
 import com.toneatti.turnos.user.domain.model.User;
+import com.toneatti.turnos.user.domain.ports.in.GetUserByExternalIdUseCase;
 import com.toneatti.turnos.user.domain.ports.in.LoginUserUseCase;
 import com.toneatti.turnos.user.domain.ports.in.RegisterUserUseCase;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ public class UserService {
 
     private final RegisterUserUseCase registerUserUseCase;
     private final LoginUserUseCase loginUserUseCase;
+    private final GetUserByExternalIdUseCase getUserByExternalIdUseCase;
 
     public User registerUser(User user, String rawPassword) {
         return registerUserUseCase.registerUser(user, rawPassword);
@@ -22,6 +24,11 @@ public class UserService {
     public AccessToken loginUser(String email, String rawPassword) {
         return loginUserUseCase.loginUser(email, rawPassword)
                 .orElseThrow(() -> new UserException("Invalid email or password"));
+    }
+
+    public User getUserByExternalId(String externalId) {
+        return getUserByExternalIdUseCase.getUserByExternalId(externalId)
+                .orElseThrow(() -> new UserException("Could not find user with externalId: " + externalId));
     }
 
 }

@@ -3,6 +3,7 @@ package com.toneatti.turnos.user.application.service;
 import com.toneatti.turnos.user.application.exception.UserException;
 import com.toneatti.turnos.user.domain.model.AccessToken;
 import com.toneatti.turnos.user.domain.model.User;
+import com.toneatti.turnos.user.domain.ports.in.GetUserByExternalIdUseCase;
 import com.toneatti.turnos.user.domain.ports.in.LoginUserUseCase;
 import com.toneatti.turnos.user.domain.ports.in.RegisterUserUseCase;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class UserServiceTest {
 
     @Mock
     private LoginUserUseCase loginUserUseCase;
+
+    @Mock
+    private GetUserByExternalIdUseCase getUserByExternalIdUseCase;
 
     @InjectMocks
     private UserService userService;
@@ -54,5 +58,21 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.loginUser("juan@example.com", "wrong-password"))
                 .isInstanceOf(UserException.class)
                 .hasMessage("Invalid email or password");
+    }
+
+    @Test
+    void getUserByExternalIdReturnsTheUserOfTheUseCase() {
+        User user = new User(7L, "external-id", "juan@example.com", null, null, null, null);
+        when(getUserByExternalIdUseCase.getUserByExternalId("external-id")).thenReturn(Optional.of(user));
+
+        assertThat(userService.getUserByExternalId("external-id")).isSameAs(user);
+    }
+
+    @Test
+    void getUserByExternalIdThrowsUserExceptionWhenTheUserDoesNotExist() {
+        when(getUserByExternalIdUseCase.getUserByExternalId("missing-id")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getUserByExternalId("missing-id"))
+                .isInstanceOf(UserException.class);
     }
 }

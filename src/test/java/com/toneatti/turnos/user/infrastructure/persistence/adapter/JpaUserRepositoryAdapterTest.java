@@ -69,6 +69,22 @@ class JpaUserRepositoryAdapterTest {
         assertThat(adapter().findByEmail("nobody@example.com")).isEmpty();
     }
 
+    @Test
+    void findByExternalIdMapsTheStoredUser() {
+        when(jpaUserRepository.findByExternalId("3f1c2b8e-0000-4000-8000-000000000001"))
+                .thenReturn(Optional.of(storedEntity()));
+
+        assertThat(adapter().findByExternalId("3f1c2b8e-0000-4000-8000-000000000001"))
+                .hasValueSatisfying(found -> assertThat(found.email()).isEqualTo("juan@example.com"));
+    }
+
+    @Test
+    void findByExternalIdReturnsEmptyWhenThereIsNoUser() {
+        when(jpaUserRepository.findByExternalId("missing-id")).thenReturn(Optional.empty());
+
+        assertThat(adapter().findByExternalId("missing-id")).isEmpty();
+    }
+
     private static UserEntity storedEntity() {
         return UserEntity.builder()
                 .id(7L)
