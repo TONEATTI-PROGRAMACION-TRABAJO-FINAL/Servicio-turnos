@@ -1,6 +1,7 @@
 package com.toneatti.turnos.user.domain.model;
 
 import java.time.Instant;
+import java.util.Locale;
 
 public record User(
         Long id,
@@ -11,6 +12,11 @@ public record User(
         String lastName,
         Instant createdAt
 ) {
+
+    // Emails are unique regardless of case and surrounding spaces.
+    public static String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
 
     // The generated toString would expose the password hash in logs.
     @Override

@@ -18,4 +18,12 @@ class BCryptPasswordHasherAdapterTest {
         assertThat(passwordEncoder.matches("secret-password", hash)).isTrue();
         assertThat(passwordEncoder.matches("other-password", hash)).isFalse();
     }
+
+    @Test
+    void matchesOnlyTheOriginalPassword() {
+        String hash = passwordEncoder.encode("secret-password");
+
+        assertThat(passwordHasher.matches("secret-password", hash)).isTrue();
+        assertThat(passwordHasher.matches("other-password", hash)).isFalse();
+    }
 }

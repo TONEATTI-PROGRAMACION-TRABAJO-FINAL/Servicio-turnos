@@ -1,12 +1,10 @@
 package com.toneatti.turnos.user.infrastructure.web.dto;
 
-import jakarta.validation.constraints.AssertTrue;
+import com.toneatti.turnos.user.infrastructure.web.validation.PasswordWithinBcryptLimit;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
-
-import java.nio.charset.StandardCharsets;
 
 @Getter
 @Setter
@@ -22,6 +20,7 @@ public class UserRequest {
 
     @NotBlank(message = "Password is mandatory")
     @Size(min = 8, message = "Password must have at least 8 characters")
+    @PasswordWithinBcryptLimit
     private String password;
 
     // Same limits the cátedra applies to patientFirstName and patientLastName when confirming a hold.
@@ -32,10 +31,4 @@ public class UserRequest {
     @NotBlank(message = "Last name is mandatory")
     @Size(min = 2, max = 100, message = "Last name must have between 2 and 100 characters")
     private String lastName;
-
-    // BCrypt rejects passwords longer than 72 bytes, and a non-ASCII character takes more than one byte in UTF-8.
-    @AssertTrue(message = "Password must have at most 72 bytes in UTF-8")
-    public boolean isPasswordWithinBcryptLimit() {
-        return password == null || password.getBytes(StandardCharsets.UTF_8).length <= 72;
-    }
 }

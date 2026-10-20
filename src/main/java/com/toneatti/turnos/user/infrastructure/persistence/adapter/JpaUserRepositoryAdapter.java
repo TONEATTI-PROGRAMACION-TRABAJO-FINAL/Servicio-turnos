@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
 public class JpaUserRepositoryAdapter implements UserRepository {
@@ -35,5 +37,15 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     @Override
     public boolean existsByEmail(String email) {
         return jpaUserRepository.existsByEmail(email);
+    }
+
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return jpaUserRepository.findByEmail(email).map(userMapper::toDomainModel);
+    }
+
+    @Override
+    public Optional<User> findByExternalId(String externalId) {
+        return jpaUserRepository.findByExternalId(externalId).map(userMapper::toDomainModel);
     }
 }

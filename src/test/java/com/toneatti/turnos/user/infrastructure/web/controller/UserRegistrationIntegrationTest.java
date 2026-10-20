@@ -100,7 +100,7 @@ class UserRegistrationIntegrationTest {
     @Test
     void otherEndpointsAreNotPublic() throws Exception {
         mockMvc.perform(get("/users"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     private static String body(String email, String password, String firstName, String lastName) {
