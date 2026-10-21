@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.Locale;
 import java.util.UUID;
 
 @Component
@@ -21,7 +20,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
     @Override
     public User registerUser(User user, String rawPassword) {
-        String email = user.email().trim().toLowerCase(Locale.ROOT);
+        String email = User.normalizeEmail(user.email());
         if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyRegisteredException(email);
         }
