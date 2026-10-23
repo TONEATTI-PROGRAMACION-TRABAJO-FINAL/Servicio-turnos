@@ -7,6 +7,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.validation.FieldError;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CatalogoServicePropertiesTest {
@@ -17,15 +19,39 @@ class CatalogoServicePropertiesTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(TestConfig.class)
-            .withPropertyValues("catalogo.base-url=http://localhost:8080");
+            .withPropertyValues("catalogo.base-url=http://localhost:8081");
 
     @Test
-    void bindsTheBaseUrlWhenItIsValid() {
+    void bindsTheBaseUrlAndDefaultsTheTimeouts() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context.getBean(CatalogoServiceProperties.class).baseUrl())
-                    .isEqualTo("http://localhost:8080");
+            CatalogoServiceProperties properties = context.getBean(CatalogoServiceProperties.class);
+
+            assertThat(properties.baseUrl()).isEqualTo("http://localhost:8081");
+            assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+            assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(3));
         });
+    }
+
+    @Test
+    void bindsConfiguredTimeouts() {
+        contextRunner.withPropertyValues("catalogo.connect-timeout=PT1S", "catalogo.read-timeout=PT0.5S")
+                .run(context -> {
+                    CatalogoServiceProperties properties = context.getBean(CatalogoServiceProperties.class);
+
+                    assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.readTimeout()).isEqualTo(Duration.ofMillis(500));
+                });
+    }
+
+    @Test
+    void failsWhenTheConnectTimeoutIsNotPositive() {
+        assertFailsOn("connectTimeoutPositive", "catalogo.connect-timeout=PT0S");
+    }
+
+    @Test
+    void failsWhenTheReadTimeoutIsNotPositive() {
+        assertFailsOn("readTimeoutPositive", "catalogo.read-timeout=-PT1S");
     }
 
     @Test
