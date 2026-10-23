@@ -1,6 +1,7 @@
 package com.toneatti.turnos.catalogo.infrastructure.rest.adapter;
 
 import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableException;
+import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.infrastructure.rest.FakeCatalogoServer;
 import com.toneatti.turnos.catalogo.infrastructure.rest.config.CatalogoRestClientConfig;
@@ -23,6 +24,7 @@ class RestCatalogoRepositoryAdapterTest {
 
     private static final Duration READ_TIMEOUT = Duration.ofMillis(500);
     private static final String CATEGORIES_PATH = "/professional-categories";
+    private static final String PROFESSIONALS_PATH = "/professionals";
 
     private FakeCatalogoServer catalogo;
     private RestCatalogoRepositoryAdapter adapter;
@@ -62,6 +64,45 @@ class RestCatalogoRepositoryAdapterTest {
         catalogo.respond(CATEGORIES_PATH, 200, "");
 
         assertThat(adapter.findAllCategories()).isEmpty();
+    }
+
+    @Test
+    void findsTheProfessionalsOfACategory() {
+        catalogo.respond(PROFESSIONALS_PATH, 200, """
+                [{"id":15,"categoryId":1,"firstName":"Ana","lastName":"Gomez","enabled":true}]
+                """);
+
+        assertThat(adapter.findProfessionalsByCategoryId(1L))
+                .containsExactly(new Professional(15L, 1L, "Ana", "Gomez", true));
+        assertThat(catalogo.lastRequestUri().getQuery()).isEqualTo("categoryId=1");
+    }
+
+    @Test
+    void findsTheProfessionalsOfEveryCategoryWithoutACategoryId() {
+        catalogo.respond(PROFESSIONALS_PATH, 200, """
+                [{"id":15,"categoryId":1,"firstName":"Ana","lastName":"Gomez","enabled":true},
+                 {"id":16,"categoryId":2,"firstName":"Luis","lastName":"Diaz","enabled":true}]
+                """);
+
+        assertThat(adapter.findProfessionalsByCategoryId(null)).extracting(Professional::id).containsExactly(15L, 16L);
+        assertThat(catalogo.lastRequestUri().getQuery()).isNull();
+    }
+
+    @Test
+    void findsNoProfessionalsWhenTheCategoryHasNone() {
+        catalogo.respond(PROFESSIONALS_PATH, 200, "[]");
+
+        assertThat(adapter.findProfessionalsByCategoryId(99L)).isEmpty();
+    }
+
+    @Test
+    void failsAsUnavailableWhenTheProfessionalsCannotBeFetched() {
+        catalogo.respond(PROFESSIONALS_PATH, 503, "{\"status\":503,\"title\":\"Service Unavailable\"}");
+
+        assertThatThrownBy(() -> adapter.findProfessionalsByCategoryId(1L))
+                .isInstanceOf(CatalogoUnavailableException.class)
+                .hasMessageContaining("GET " + PROFESSIONALS_PATH)
+                .hasCauseInstanceOf(HttpServerErrorException.class);
     }
 
     @Test

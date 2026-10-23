@@ -1,5 +1,6 @@
 package com.toneatti.turnos.catalogo.domain.ports.out;
 
+import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 
 import java.util.List;
@@ -10,5 +11,10 @@ import java.util.List;
 public interface CatalogoRepository {
 
     List<ProfessionalCategory> findAllCategories();
+
+    /**
+     * Enabled professionals of the given category, or of every category when {@code categoryId} is null.
+     */
+    List<Professional> findProfessionalsByCategoryId(Long categoryId);
 
 }
