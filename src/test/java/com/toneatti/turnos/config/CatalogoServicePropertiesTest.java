@@ -17,14 +17,14 @@ class CatalogoServicePropertiesTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(TestConfig.class)
-            .withPropertyValues("catalogo.base-url=http://localhost:8080");
+            .withPropertyValues("catalogo.base-url=http://localhost:8081");
 
     @Test
     void bindsTheBaseUrlWhenItIsValid() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(CatalogoServiceProperties.class).baseUrl())
-                    .isEqualTo("http://localhost:8080");
+                    .isEqualTo("http://localhost:8081");
         });
     }
 
