@@ -2,6 +2,7 @@ package com.toneatti.turnos.catalogo.domain.ports.out;
 
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
+import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,5 +23,10 @@ public interface CatalogoRepository {
      * The professional with that id, enabled or not, so past reservations can still show the name.
      */
     Optional<Professional> findProfessionalById(Long id);
+
+    /**
+     * Enabled weekly schedules of the professional; empty when it has none or does not exist.
+     */
+    List<WeeklySchedule> findWeeklySchedulesByProfessionalId(Long professionalId);
 
 }

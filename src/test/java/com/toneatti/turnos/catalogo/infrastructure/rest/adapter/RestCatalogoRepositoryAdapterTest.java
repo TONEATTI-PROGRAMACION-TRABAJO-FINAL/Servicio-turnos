@@ -3,6 +3,7 @@ package com.toneatti.turnos.catalogo.infrastructure.rest.adapter;
 import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableException;
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
+import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
 import com.toneatti.turnos.catalogo.infrastructure.rest.FakeCatalogoServer;
 import com.toneatti.turnos.catalogo.infrastructure.rest.config.CatalogoRestClientConfig;
 import com.toneatti.turnos.catalogo.infrastructure.rest.mapper.CatalogoRestMapper;
@@ -15,7 +16,9 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.io.IOException;
+import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.LocalTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,6 +28,7 @@ class RestCatalogoRepositoryAdapterTest {
     private static final Duration READ_TIMEOUT = Duration.ofMillis(500);
     private static final String CATEGORIES_PATH = "/professional-categories";
     private static final String PROFESSIONALS_PATH = "/professionals";
+    private static final String WEEKLY_SCHEDULES_PATH = "/weekly-schedules";
 
     private FakeCatalogoServer catalogo;
     private RestCatalogoRepositoryAdapter adapter;
@@ -140,6 +144,40 @@ class RestCatalogoRepositoryAdapterTest {
                 .isInstanceOf(CatalogoUnavailableException.class)
                 .hasMessageContaining("GET " + PROFESSIONALS_PATH + "/15")
                 .hasCauseInstanceOf(HttpServerErrorException.class);
+    }
+
+    @Test
+    void findsTheWeeklySchedulesOfAProfessional() {
+        catalogo.respond(WEEKLY_SCHEDULES_PATH, 200, """
+                [{"id":21,"professionalId":15,"dayOfWeek":"MONDAY","startTime":"09:00:00","endTime":"12:00:00",
+                  "slotDurationMinutes":30},
+                 {"id":22,"professionalId":15,"dayOfWeek":"SUNDAY","startTime":"14:30:00","endTime":"18:00:00",
+                  "slotDurationMinutes":45}]
+                """);
+
+        assertThat(adapter.findWeeklySchedulesByProfessionalId(15L)).containsExactly(
+                new WeeklySchedule(21L, 15L, DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(12, 0), 30),
+                new WeeklySchedule(22L, 15L, DayOfWeek.SUNDAY, LocalTime.of(14, 30), LocalTime.of(18, 0), 45));
+        assertThat(catalogo.lastRequestUri().getQuery()).isEqualTo("professionalId=15");
+    }
+
+    @Test
+    void findsNoWeeklySchedulesWhenTheProfessionalHasNone() {
+        catalogo.respond(WEEKLY_SCHEDULES_PATH, 200, "[]");
+
+        assertThat(adapter.findWeeklySchedulesByProfessionalId(99L)).isEmpty();
+    }
+
+    @Test
+    void failsAsUnavailableWhenADayOfWeekIsUnknown() {
+        catalogo.respond(WEEKLY_SCHEDULES_PATH, 200, """
+                [{"id":21,"professionalId":15,"dayOfWeek":"LUNES","startTime":"09:00:00","endTime":"12:00:00",
+                  "slotDurationMinutes":30}]
+                """);
+
+        assertThatThrownBy(() -> adapter.findWeeklySchedulesByProfessionalId(15L))
+                .isInstanceOf(CatalogoUnavailableException.class)
+                .hasMessageContaining("GET " + WEEKLY_SCHEDULES_PATH);
     }
 
     @Test

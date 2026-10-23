@@ -3,9 +3,11 @@ package com.toneatti.turnos.catalogo.infrastructure.rest.adapter;
 import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableException;
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
+import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
 import com.toneatti.turnos.catalogo.domain.ports.out.CatalogoRepository;
 import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoProfessionalCategoryResponse;
 import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoProfessionalResponse;
+import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoWeeklyScheduleResponse;
 import com.toneatti.turnos.catalogo.infrastructure.rest.mapper.CatalogoRestMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
@@ -31,6 +33,9 @@ public class RestCatalogoRepositoryAdapter implements CatalogoRepository {
             new ParameterizedTypeReference<>() {
             };
     private static final ParameterizedTypeReference<List<CatalogoProfessionalResponse>> PROFESSIONALS =
+            new ParameterizedTypeReference<>() {
+            };
+    private static final ParameterizedTypeReference<List<CatalogoWeeklyScheduleResponse>> WEEKLY_SCHEDULES =
             new ParameterizedTypeReference<>() {
             };
 
@@ -60,6 +65,18 @@ public class RestCatalogoRepositoryAdapter implements CatalogoRepository {
     public Optional<Professional> findProfessionalById(Long id) {
         return call("GET /professionals/" + id, () -> fetchProfessional(id))
                 .map(catalogoRestMapper::toDomainModel);
+    }
+
+    @Override
+    public List<WeeklySchedule> findWeeklySchedulesByProfessionalId(Long professionalId) {
+        List<CatalogoWeeklyScheduleResponse> body = call("GET /weekly-schedules", () ->
+                catalogoRestClient.get()
+                        .uri(uri -> uri.path("/weekly-schedules")
+                                .queryParam("professionalId", professionalId)
+                                .build())
+                        .retrieve()
+                        .body(WEEKLY_SCHEDULES));
+        return mapAll(body, catalogoRestMapper::toDomainModel);
     }
 
     // A 404 means the id does not exist; any other error status still reaches call() as unavailable.
