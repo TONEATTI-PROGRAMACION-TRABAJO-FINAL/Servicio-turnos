@@ -10,6 +10,7 @@ import com.toneatti.turnos.catalogo.infrastructure.rest.mapper.CatalogoRestMappe
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -53,6 +54,24 @@ public class RestCatalogoRepositoryAdapter implements CatalogoRepository {
                         .retrieve()
                         .body(PROFESSIONALS));
         return mapAll(body, catalogoRestMapper::toDomainModel);
+    }
+
+    @Override
+    public Optional<Professional> findProfessionalById(Long id) {
+        return call("GET /professionals/" + id, () -> fetchProfessional(id))
+                .map(catalogoRestMapper::toDomainModel);
+    }
+
+    // A 404 means the id does not exist; any other error status still reaches call() as unavailable.
+    private Optional<CatalogoProfessionalResponse> fetchProfessional(Long id) {
+        try {
+            return Optional.ofNullable(catalogoRestClient.get()
+                    .uri("/professionals/{id}", id)
+                    .retrieve()
+                    .body(CatalogoProfessionalResponse.class));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
     }
 
     // Error statuses, timeouts, refused connections and unreadable bodies all surface as RestClientException.

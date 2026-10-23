@@ -106,6 +106,43 @@ class RestCatalogoRepositoryAdapterTest {
     }
 
     @Test
+    void findsAProfessionalById() {
+        catalogo.respond(PROFESSIONALS_PATH + "/15", 200, """
+                {"id":15,"categoryId":1,"firstName":"Ana","lastName":"Gomez","enabled":true}
+                """);
+
+        assertThat(adapter.findProfessionalById(15L)).contains(new Professional(15L, 1L, "Ana", "Gomez", true));
+    }
+
+    @Test
+    void findsADisabledProfessionalById() {
+        catalogo.respond(PROFESSIONALS_PATH + "/15", 200, """
+                {"id":15,"categoryId":1,"firstName":"Ana","lastName":"Gomez","enabled":false}
+                """);
+
+        assertThat(adapter.findProfessionalById(15L)).hasValueSatisfying(professional ->
+                assertThat(professional.enabled()).isFalse());
+    }
+
+    @Test
+    void findsNoProfessionalWhenTheCatalogoAnswersNotFound() {
+        catalogo.respond(PROFESSIONALS_PATH + "/99", 404,
+                "{\"instance\":\"/professionals/99\",\"status\":404,\"title\":\"Not Found\"}");
+
+        assertThat(adapter.findProfessionalById(99L)).isEmpty();
+    }
+
+    @Test
+    void failsAsUnavailableWhenAProfessionalCannotBeFetched() {
+        catalogo.respond(PROFESSIONALS_PATH + "/15", 500, "{\"status\":500,\"title\":\"Internal Server Error\"}");
+
+        assertThatThrownBy(() -> adapter.findProfessionalById(15L))
+                .isInstanceOf(CatalogoUnavailableException.class)
+                .hasMessageContaining("GET " + PROFESSIONALS_PATH + "/15")
+                .hasCauseInstanceOf(HttpServerErrorException.class);
+    }
+
+    @Test
     void failsAsUnavailableOnAServerError() {
         catalogo.respond(CATEGORIES_PATH, 500, "{\"status\":500,\"title\":\"Internal Server Error\"}");
 
