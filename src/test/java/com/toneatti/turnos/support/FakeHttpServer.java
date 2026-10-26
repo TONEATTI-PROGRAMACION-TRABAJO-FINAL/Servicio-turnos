@@ -1,4 +1,4 @@
-package com.toneatti.turnos.catalogo.infrastructure.rest;
+package com.toneatti.turnos.support;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -16,10 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 /**
- * Stand-in for Servicio-catalogo on a free local port, built on the JDK HTTP server.
+ * Stand-in for an HTTP service consumed by this one (Servicio-catalogo or the cátedra) on a free local port,
+ * built on the JDK HTTP server.
  * Each path answers with the canned response registered for it; unknown paths answer 404.
  */
-public final class FakeCatalogoServer implements AutoCloseable {
+public final class FakeHttpServer implements AutoCloseable {
 
     private static final String PROBLEM_JSON = "application/problem+json";
     private static final String JSON = "application/json";
@@ -31,13 +32,13 @@ public final class FakeCatalogoServer implements AutoCloseable {
     private final Map<String, CannedResponse> responses = new ConcurrentHashMap<>();
     private volatile URI lastRequestUri;
 
-    private FakeCatalogoServer(HttpServer server) {
+    private FakeHttpServer(HttpServer server) {
         this.server = server;
     }
 
-    public static FakeCatalogoServer start() throws IOException {
+    public static FakeHttpServer start() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-        FakeCatalogoServer fake = new FakeCatalogoServer(server);
+        FakeHttpServer fake = new FakeHttpServer(server);
         server.createContext("/", fake::handle);
         // Virtual threads so a delayed response does not block the other requests.
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());

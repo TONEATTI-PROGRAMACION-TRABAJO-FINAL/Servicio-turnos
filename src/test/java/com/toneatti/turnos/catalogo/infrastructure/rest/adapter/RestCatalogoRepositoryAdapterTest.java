@@ -4,10 +4,10 @@ import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableExc
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
-import com.toneatti.turnos.catalogo.infrastructure.rest.FakeCatalogoServer;
 import com.toneatti.turnos.catalogo.infrastructure.rest.config.CatalogoRestClientConfig;
 import com.toneatti.turnos.catalogo.infrastructure.rest.mapper.CatalogoRestMapper;
 import com.toneatti.turnos.config.CatalogoServiceProperties;
+import com.toneatti.turnos.support.FakeHttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,12 +30,12 @@ class RestCatalogoRepositoryAdapterTest {
     private static final String PROFESSIONALS_PATH = "/professionals";
     private static final String WEEKLY_SCHEDULES_PATH = "/weekly-schedules";
 
-    private FakeCatalogoServer catalogo;
+    private FakeHttpServer catalogo;
     private RestCatalogoRepositoryAdapter adapter;
 
     @BeforeEach
     void startCatalogo() throws IOException {
-        catalogo = FakeCatalogoServer.start();
+        catalogo = FakeHttpServer.start();
         adapter = adapterFor(catalogo.baseUrl());
     }
 
@@ -210,7 +210,7 @@ class RestCatalogoRepositoryAdapterTest {
 
     @Test
     void failsAsUnavailableWhenTheConnectionIsRefused() throws IOException {
-        RestCatalogoRepositoryAdapter unreachable = adapterFor(FakeCatalogoServer.unreachableBaseUrl());
+        RestCatalogoRepositoryAdapter unreachable = adapterFor(FakeHttpServer.unreachableBaseUrl());
 
         assertThatThrownBy(unreachable::findAllCategories)
                 .isInstanceOf(CatalogoUnavailableException.class)
