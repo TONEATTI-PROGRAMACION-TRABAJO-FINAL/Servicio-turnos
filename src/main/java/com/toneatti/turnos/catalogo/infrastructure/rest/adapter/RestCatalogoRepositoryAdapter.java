@@ -1,6 +1,6 @@
 package com.toneatti.turnos.catalogo.infrastructure.rest.adapter;
 
-import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableException;
+import com.toneatti.turnos.catalogo.domain.exception.CatalogoUnavailableException;
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
@@ -9,7 +9,7 @@ import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoProfessional
 import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoProfessionalResponse;
 import com.toneatti.turnos.catalogo.infrastructure.rest.dto.CatalogoWeeklyScheduleResponse;
 import com.toneatti.turnos.catalogo.infrastructure.rest.mapper.CatalogoRestMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -26,7 +26,6 @@ import java.util.function.Supplier;
  * defined in {@link com.toneatti.turnos.catalogo.infrastructure.rest.config.CatalogoRestClientConfig}.
  */
 @Component
-@RequiredArgsConstructor
 public class RestCatalogoRepositoryAdapter implements CatalogoRepository {
 
     private static final ParameterizedTypeReference<List<CatalogoProfessionalCategoryResponse>> CATEGORIES =
@@ -41,6 +40,13 @@ public class RestCatalogoRepositoryAdapter implements CatalogoRepository {
 
     private final RestClient catalogoRestClient;
     private final CatalogoRestMapper catalogoRestMapper;
+
+    // Explicit constructor so @Qualifier picks the catalogo client among the RestClient beans.
+    public RestCatalogoRepositoryAdapter(@Qualifier("catalogoRestClient") RestClient catalogoRestClient,
+                                         CatalogoRestMapper catalogoRestMapper) {
+        this.catalogoRestClient = catalogoRestClient;
+        this.catalogoRestMapper = catalogoRestMapper;
+    }
 
     @Override
     public List<ProfessionalCategory> findAllCategories() {

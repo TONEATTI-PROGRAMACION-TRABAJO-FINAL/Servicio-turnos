@@ -1,10 +1,12 @@
-package com.toneatti.turnos.catalogo.infrastructure.rest;
+package com.toneatti.turnos.support;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -16,10 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 /**
- * Stand-in for Servicio-catalogo on a free local port, built on the JDK HTTP server.
+ * Stand-in for an HTTP service consumed by this one (Servicio-catalogo or the cátedra) on a free local port,
+ * built on the JDK HTTP server.
  * Each path answers with the canned response registered for it; unknown paths answer 404.
  */
-public final class FakeCatalogoServer implements AutoCloseable {
+public final class FakeHttpServer implements AutoCloseable {
 
     private static final String PROBLEM_JSON = "application/problem+json";
     private static final String JSON = "application/json";
@@ -30,14 +33,23 @@ public final class FakeCatalogoServer implements AutoCloseable {
     private final HttpServer server;
     private final Map<String, CannedResponse> responses = new ConcurrentHashMap<>();
     private volatile URI lastRequestUri;
+    private volatile Headers lastRequestHeaders;
 
-    private FakeCatalogoServer(HttpServer server) {
+    private FakeHttpServer(HttpServer server) {
         this.server = server;
     }
 
-    public static FakeCatalogoServer start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-        FakeCatalogoServer fake = new FakeCatalogoServer(server);
+    /**
+     * Unchecked so it can also start a server in a static field initializer.
+     */
+    public static FakeHttpServer start() {
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        FakeHttpServer fake = new FakeHttpServer(server);
         server.createContext("/", fake::handle);
         // Virtual threads so a delayed response does not block the other requests.
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
@@ -70,6 +82,13 @@ public final class FakeCatalogoServer implements AutoCloseable {
         return lastRequestUri;
     }
 
+    /**
+     * First value of that header in the last request, or null when it was not sent.
+     */
+    public String lastRequestHeader(String name) {
+        return lastRequestHeaders.getFirst(name);
+    }
+
     @Override
     public void close() {
         server.stop(0);
@@ -77,6 +96,7 @@ public final class FakeCatalogoServer implements AutoCloseable {
 
     private void handle(HttpExchange exchange) throws IOException {
         lastRequestUri = exchange.getRequestURI();
+        lastRequestHeaders = exchange.getRequestHeaders();
         CannedResponse response = responses.getOrDefault(exchange.getRequestURI().getPath(),
                 new CannedResponse(404, "{\"status\":404,\"title\":\"Not Found\"}", Duration.ZERO));
         try {

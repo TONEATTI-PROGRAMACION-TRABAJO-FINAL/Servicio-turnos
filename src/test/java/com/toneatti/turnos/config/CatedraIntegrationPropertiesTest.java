@@ -2,11 +2,11 @@ package com.toneatti.turnos.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.context.properties.bind.validation.BindValidationException;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.core.NestedExceptionUtils;
-import org.springframework.validation.FieldError;
 
+import java.time.Duration;
+
+import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.assertFailsOn;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CatedraIntegrationPropertiesTest {
@@ -33,6 +33,8 @@ class CatedraIntegrationPropertiesTest {
 
             assertThat(properties.apiBaseUrl()).isEqualTo("http://localhost:8089");
             assertThat(properties.jwt()).isEqualTo("test-jwt");
+            assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+            assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(5));
             assertThat(properties.kafka().bootstrapServers()).isEqualTo("localhost:9092");
             assertThat(properties.kafka().consumerGroupId()).isEqualTo("alumnos-test");
             assertThat(properties.kafka().appointmentActionsTopic()).isEqualTo("alumnos.turnos.acciones.test");
@@ -41,28 +43,49 @@ class CatedraIntegrationPropertiesTest {
     }
 
     @Test
+    void bindsConfiguredTimeouts() {
+        contextRunner.withPropertyValues("catedra.connect-timeout=PT1S", "catedra.read-timeout=PT0.5S")
+                .run(context -> {
+                    CatedraIntegrationProperties properties = context.getBean(CatedraIntegrationProperties.class);
+
+                    assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.readTimeout()).isEqualTo(Duration.ofMillis(500));
+                });
+    }
+
+    @Test
+    void failsWhenTheConnectTimeoutIsNotPositive() {
+        assertFailsOn(contextRunner, "connectTimeout", "catedra.connect-timeout=PT0S");
+    }
+
+    @Test
+    void failsWhenTheReadTimeoutIsNotPositive() {
+        assertFailsOn(contextRunner, "readTimeout", "catedra.read-timeout=-PT1S");
+    }
+
+    @Test
     void failsWhenTheJwtIsMissing() {
-        assertFailsOn("jwt", "catedra.jwt=");
+        assertFailsOn(contextRunner, "jwt", "catedra.jwt=");
     }
 
     @Test
     void failsWhenTheApiBaseUrlIsMissing() {
-        assertFailsOn("apiBaseUrl", "catedra.api-base-url=");
+        assertFailsOn(contextRunner, "apiBaseUrl", "catedra.api-base-url=");
     }
 
     @Test
     void failsWhenTheApiBaseUrlIsNotAUrl() {
-        assertFailsOn("apiBaseUrl", "catedra.api-base-url=not a url");
+        assertFailsOn(contextRunner, "apiBaseUrl", "catedra.api-base-url=not a url");
     }
 
     @Test
     void failsWhenTheActionsTopicIsMissing() {
-        assertFailsOn("kafka.appointmentActionsTopic", "catedra.kafka.appointment-actions-topic=");
+        assertFailsOn(contextRunner, "kafka.appointmentActionsTopic", "catedra.kafka.appointment-actions-topic=");
     }
 
     @Test
     void failsWhenThePhoneTopicIsMissing() {
-        assertFailsOn("kafka.appointmentPhoneTopic", "catedra.kafka.appointment-phone-topic=");
+        assertFailsOn(contextRunner, "kafka.appointmentPhoneTopic", "catedra.kafka.appointment-phone-topic=");
     }
 
     @Test
@@ -72,17 +95,6 @@ class CatedraIntegrationPropertiesTest {
 
             assertThat(text).doesNotContain("test-jwt");
             assertThat(text).contains("http://localhost:8089", "localhost:9092");
-        });
-    }
-
-    private void assertFailsOn(String field, String override) {
-        contextRunner.withPropertyValues(override).run(context -> {
-            assertThat(context).hasFailed();
-            Throwable rootCause = NestedExceptionUtils.getRootCause(context.getStartupFailure());
-            assertThat(rootCause).isInstanceOf(BindValidationException.class);
-            assertThat(((BindValidationException) rootCause).getValidationErrors().getAllErrors())
-                    .extracting(error -> ((FieldError) error).getField())
-                    .containsExactly(field);
         });
     }
 }
