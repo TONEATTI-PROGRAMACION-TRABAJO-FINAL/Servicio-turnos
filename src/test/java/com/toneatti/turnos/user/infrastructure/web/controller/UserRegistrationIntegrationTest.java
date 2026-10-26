@@ -76,20 +76,19 @@ class UserRegistrationIntegrationTest {
     }
 
     @Test
-    void acceptsAPasswordOfExactly72BytesInUtf8() throws Exception {
-        // "ñ" takes 2 bytes in UTF-8: 36 characters are 72 bytes.
+    void acceptsAPasswordOfExactly128Characters() throws Exception {
+        // "ñ" takes 2 bytes in UTF-8: 256 bytes, far beyond the 72 bytes BCrypt could process.
         mockMvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("marta.nunez@example.com", "ñ".repeat(36), "Marta", "Nuñez")))
+                        .content(body("marta.nunez@example.com", "ñ".repeat(128), "Marta", "Nuñez")))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void rejectsAPasswordLongerThan72BytesInUtf8WithProblemJson() throws Exception {
-        // 37 characters, under the old 72 character limit, but 74 bytes in UTF-8.
+    void rejectsAPasswordLongerThan128CharactersWithProblemJson() throws Exception {
         mockMvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("pedro.nunez@example.com", "ñ".repeat(37), "Pedro", "Nuñez")))
+                        .content(body("pedro.nunez@example.com", "ñ".repeat(129), "Pedro", "Nuñez")))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(400));
