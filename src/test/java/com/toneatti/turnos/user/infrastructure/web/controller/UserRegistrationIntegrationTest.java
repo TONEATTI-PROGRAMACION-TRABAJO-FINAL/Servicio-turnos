@@ -46,7 +46,7 @@ class UserRegistrationIntegrationTest {
                 .filter(user -> user.getEmail().equals("ana.gomez@example.com"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(stored.getPasswordHash()).isNotEqualTo("secret-password").startsWith("$2");
+        assertThat(stored.getPasswordHash()).isNotEqualTo("secret-password").startsWith("$argon2id$");
     }
 
     @Test

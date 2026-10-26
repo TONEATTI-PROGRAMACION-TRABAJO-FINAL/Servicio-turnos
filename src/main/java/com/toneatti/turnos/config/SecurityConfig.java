@@ -8,7 +8,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -29,6 +29,14 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 @EnableConfigurationProperties(UserJwtProperties.class)
 public class SecurityConfig {
+
+    // Argon2id with the minimum configuration of the OWASP Password Storage Cheat Sheet (19 MiB, t=2, p=1),
+    // and the salt and hash lengths recommended by RFC 9106.
+    private static final int ARGON2_SALT_LENGTH = 16;
+    private static final int ARGON2_HASH_LENGTH = 32;
+    private static final int ARGON2_PARALLELISM = 1;
+    private static final int ARGON2_MEMORY_KIB = 19456;
+    private static final int ARGON2_ITERATIONS = 2;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -52,7 +60,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new Argon2PasswordEncoder(ARGON2_SALT_LENGTH, ARGON2_HASH_LENGTH, ARGON2_PARALLELISM,
+                ARGON2_MEMORY_KIB, ARGON2_ITERATIONS);
     }
 
     @Bean

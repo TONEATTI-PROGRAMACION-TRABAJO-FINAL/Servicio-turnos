@@ -6,11 +6,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Delegates to the BCrypt {@link PasswordEncoder} defined in {@code config.SecurityConfig}.
+ * Delegates to the Argon2id {@link PasswordEncoder} defined in {@code config.SecurityConfig}.
  */
 @Component
 @RequiredArgsConstructor
-public class BCryptPasswordHasherAdapter implements PasswordHasher {
+public class Argon2PasswordHasherAdapter implements PasswordHasher {
 
     private final PasswordEncoder passwordEncoder;
 
