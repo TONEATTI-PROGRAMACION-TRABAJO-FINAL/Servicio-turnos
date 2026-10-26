@@ -47,3 +47,21 @@ El archivo `.env` contiene secretos (JWT técnico y secreto del JWT de usuario):
 ### Tests
 
 Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions.
+
+## Contraseñas
+
+Las contraseñas de los usuarios se guardan hasheadas con **Argon2id** (`Argon2PasswordEncoder` de Spring Security, que delega el cálculo en BouncyCastle `bcprov-jdk18on`). Los parámetros son la configuración mínima que recomienda el [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id), con los largos de salt y de hash de la [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106):
+
+| Parámetro | Valor |
+| --- | --- |
+| Memoria | 19 MiB (19456 KiB) |
+| Iteraciones | 2 |
+| Paralelismo | 1 |
+| Salt | 16 bytes, aleatoria por usuario |
+| Hash | 32 bytes |
+
+Cada hash tarda unos 30 ms. El hash guardado incluye sus parámetros (`$argon2id$v=19$m=19456,t=2,p=1$...`).
+
+Al registrarse, la contraseña debe tener entre 8 y 128 caracteres; el login también rechaza más de 128. El máximo solo evita que contraseñas enormes encarezcan cada hash. Si no se cumple, la respuesta es un `400` en `application/problem+json`.
+
+La base es H2 en memoria, así que no hay hashes BCrypt viejos que migrar: al reiniciar, todos los usuarios se registran de nuevo con Argon2id.
