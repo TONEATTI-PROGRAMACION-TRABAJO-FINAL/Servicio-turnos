@@ -37,7 +37,7 @@ class RestCatedraRepositoryAdapterTest {
     private RestCatedraRepositoryAdapter adapter;
 
     @BeforeEach
-    void startCatedra() throws IOException {
+    void startCatedra() {
         catedra = FakeHttpServer.start();
         adapter = adapterFor(catedra.baseUrl());
     }

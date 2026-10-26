@@ -34,7 +34,7 @@ class RestCatalogoRepositoryAdapterTest {
     private RestCatalogoRepositoryAdapter adapter;
 
     @BeforeEach
-    void startCatalogo() throws IOException {
+    void startCatalogo() {
         catalogo = FakeHttpServer.start();
         adapter = adapterFor(catalogo.baseUrl());
     }

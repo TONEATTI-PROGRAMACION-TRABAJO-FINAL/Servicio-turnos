@@ -6,6 +6,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -38,8 +39,16 @@ public final class FakeHttpServer implements AutoCloseable {
         this.server = server;
     }
 
-    public static FakeHttpServer start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    /**
+     * Unchecked so it can also start a server in a static field initializer.
+     */
+    public static FakeHttpServer start() {
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         FakeHttpServer fake = new FakeHttpServer(server);
         server.createContext("/", fake::handle);
         // Virtual threads so a delayed response does not block the other requests.

@@ -10,9 +10,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -23,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class RestCatalogoRepositoryAdapterWiringIntegrationTest {
 
-    private static final FakeHttpServer CATALOGO = startCatalogo();
+    private static final FakeHttpServer CATALOGO = FakeHttpServer.start();
 
     @Autowired
     private RestCatalogoRepositoryAdapter adapter;
@@ -45,13 +42,5 @@ class RestCatalogoRepositoryAdapterWiringIntegrationTest {
         assertThat(adapter.findAllCategories()).isEmpty();
         assertThat(CATALOGO.lastRequestUri().getPath()).isEqualTo("/professional-categories");
         assertThat(CATALOGO.lastRequestHeader(HttpHeaders.AUTHORIZATION)).isNull();
-    }
-
-    private static FakeHttpServer startCatalogo() {
-        try {
-            return FakeHttpServer.start();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 }
