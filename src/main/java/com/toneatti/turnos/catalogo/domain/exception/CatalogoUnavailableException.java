@@ -1,4 +1,4 @@
-package com.toneatti.turnos.catalogo.application.exception;
+package com.toneatti.turnos.catalogo.domain.exception;
 
 /**
  * Servicio-catalogo could not answer: error status, timeout, refused connection or unreadable response.

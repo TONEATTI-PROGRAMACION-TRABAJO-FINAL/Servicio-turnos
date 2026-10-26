@@ -1,6 +1,6 @@
 package com.toneatti.turnos.catalogo.infrastructure.rest.adapter;
 
-import com.toneatti.turnos.catalogo.application.exception.CatalogoUnavailableException;
+import com.toneatti.turnos.catalogo.domain.exception.CatalogoUnavailableException;
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;

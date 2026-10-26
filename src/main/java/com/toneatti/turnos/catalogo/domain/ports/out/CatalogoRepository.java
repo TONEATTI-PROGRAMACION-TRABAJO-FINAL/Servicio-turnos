@@ -1,5 +1,6 @@
 package com.toneatti.turnos.catalogo.domain.ports.out;
 
+import com.toneatti.turnos.catalogo.domain.exception.CatalogoUnavailableException;
 import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.domain.model.WeeklySchedule;
@@ -9,6 +10,7 @@ import java.util.Optional;
 
 /**
  * Read-only access to the local copy of the catalog kept by Servicio-catalogo.
+ * Every method throws {@link CatalogoUnavailableException} when Servicio-catalogo cannot answer.
  */
 public interface CatalogoRepository {
 
