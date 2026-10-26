@@ -7,6 +7,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.validation.FieldError;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CatedraIntegrationPropertiesTest {
@@ -33,11 +35,34 @@ class CatedraIntegrationPropertiesTest {
 
             assertThat(properties.apiBaseUrl()).isEqualTo("http://localhost:8089");
             assertThat(properties.jwt()).isEqualTo("test-jwt");
+            assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
+            assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(5));
             assertThat(properties.kafka().bootstrapServers()).isEqualTo("localhost:9092");
             assertThat(properties.kafka().consumerGroupId()).isEqualTo("alumnos-test");
             assertThat(properties.kafka().appointmentActionsTopic()).isEqualTo("alumnos.turnos.acciones.test");
             assertThat(properties.kafka().appointmentPhoneTopic()).isEqualTo("catedra.turnos.telefono.test");
         });
+    }
+
+    @Test
+    void bindsConfiguredTimeouts() {
+        contextRunner.withPropertyValues("catedra.connect-timeout=PT1S", "catedra.read-timeout=PT0.5S")
+                .run(context -> {
+                    CatedraIntegrationProperties properties = context.getBean(CatedraIntegrationProperties.class);
+
+                    assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.readTimeout()).isEqualTo(Duration.ofMillis(500));
+                });
+    }
+
+    @Test
+    void failsWhenTheConnectTimeoutIsNotPositive() {
+        assertFailsOn("connectTimeout", "catedra.connect-timeout=PT0S");
+    }
+
+    @Test
+    void failsWhenTheReadTimeoutIsNotPositive() {
+        assertFailsOn("readTimeout", "catedra.read-timeout=-PT1S");
     }
 
     @Test

@@ -46,12 +46,12 @@ class CatalogoServicePropertiesTest {
 
     @Test
     void failsWhenTheConnectTimeoutIsNotPositive() {
-        assertFailsOn("connectTimeoutPositive", "catalogo.connect-timeout=PT0S");
+        assertFailsOn("connectTimeout", "catalogo.connect-timeout=PT0S");
     }
 
     @Test
     void failsWhenTheReadTimeoutIsNotPositive() {
-        assertFailsOn("readTimeoutPositive", "catalogo.read-timeout=-PT1S");
+        assertFailsOn("readTimeout", "catalogo.read-timeout=-PT1S");
     }
 
     @Test

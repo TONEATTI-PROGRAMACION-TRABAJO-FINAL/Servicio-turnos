@@ -1,5 +1,6 @@
 package com.toneatti.turnos.support;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -31,6 +32,7 @@ public final class FakeHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final Map<String, CannedResponse> responses = new ConcurrentHashMap<>();
     private volatile URI lastRequestUri;
+    private volatile Headers lastRequestHeaders;
 
     private FakeHttpServer(HttpServer server) {
         this.server = server;
@@ -71,6 +73,13 @@ public final class FakeHttpServer implements AutoCloseable {
         return lastRequestUri;
     }
 
+    /**
+     * First value of that header in the last request, or null when it was not sent.
+     */
+    public String lastRequestHeader(String name) {
+        return lastRequestHeaders.getFirst(name);
+    }
+
     @Override
     public void close() {
         server.stop(0);
@@ -78,6 +87,7 @@ public final class FakeHttpServer implements AutoCloseable {
 
     private void handle(HttpExchange exchange) throws IOException {
         lastRequestUri = exchange.getRequestURI();
+        lastRequestHeaders = exchange.getRequestHeaders();
         CannedResponse response = responses.getOrDefault(exchange.getRequestURI().getPath(),
                 new CannedResponse(404, "{\"status\":404,\"title\":\"Not Found\"}", Duration.ZERO));
         try {
