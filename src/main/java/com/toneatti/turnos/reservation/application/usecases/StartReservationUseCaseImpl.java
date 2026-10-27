@@ -2,8 +2,11 @@ package com.toneatti.turnos.reservation.application.usecases;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
+import com.toneatti.turnos.catedra.domain.model.Occupancy;
+import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
@@ -44,11 +47,17 @@ import static com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejecte
  * {@code externalPatientId} is its external id and the names come from its registration, never from the app.
  * Each status is saved before the call to the cátedra that leaves it, and no database transaction stays open
  * during those calls.
+ * A call without an answer (timeout, server error) does not prove the operation failed (section 18.4): before
+ * calling again, the outcome is reconciled through the occupancies (hold) or the reservations (confirmation) of the
+ * cátedra, and each request makes at most {@value #MAX_ATTEMPTS} calls of each kind. When the outcome stays unknown
+ * the process remains active, and starting the same reservation again resumes it.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class StartReservationUseCaseImpl implements StartReservationUseCase {
+
+    static final int MAX_ATTEMPTS = 2;
 
     // Rejections the user can act on (another slot, another professional). Any other code is our bug.
     private static final Set<String> USER_FACING_CODES = Set.of(PROFESSIONAL_NOT_FOUND, PROFESSIONAL_DISABLED,
@@ -76,60 +85,133 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
         }
         ReservationProcess process = reservationProcessRepository.create(
                 ReservationProcess.start(userExternalId, professionalId, date, startTime, clock.instant()));
-        return Optional.of(new StartedReservation(confirm(hold(process), user.get()), false));
+        return Optional.of(new StartedReservation(confirm(hold(process, false), user.get(), false), false));
     }
 
-    // A double tap or a retry of the app continues the process of the slot instead of holding it twice.
+    // A double tap or a retry of the app continues the process of the slot instead of holding it twice. The last
+    // call of PENDING_HOLD and CONFIRMING got no answer, so they are reconciled before calling again.
     private ReservationProcess resume(ReservationProcess process, User user) {
         return switch (process.getStatus()) {
             case WAITING_FOR_PHONE -> process;
-            case HELD -> confirm(process, user);
-            // The last call to the cátedra may have had effects: repeating it blindly could duplicate them.
-            case PENDING_HOLD, CONFIRMING -> throw new ReservationPendingException(process.getId(), null);
+            case PENDING_HOLD -> confirm(hold(process, true), user, false);
+            case HELD -> confirm(process, user, false);
+            case CONFIRMING -> confirm(process, user, true);
             case EXPIRED, FAILED -> throw new IllegalStateException("Process " + process.getId() + " is not active");
         };
     }
 
-    private ReservationProcess hold(ReservationProcess process) {
-        Hold hold;
-        try {
-            hold = catedraRepository.createHold(process.getProfessionalId(), process.getDate(),
-                    process.getStartTime(), process.getUserExternalId());
-        } catch (CatedraRequestRejectedException e) {
-            throw fail(process, e);
-        } catch (CatedraUnavailableException e) {
-            throw pending(process, "creating the hold", e);
+    // outcomeUnknown: an earlier call got no answer, so the hold may exist already.
+    private ReservationProcess hold(ReservationProcess process, boolean outcomeUnknown) {
+        CatedraUnavailableException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            if (outcomeUnknown) {
+                ensureTheSlotHasNoHold(process, lastFailure);
+            }
+            try {
+                Hold hold = catedraRepository.createHold(process.getProfessionalId(), process.getDate(),
+                        process.getStartTime(), process.getUserExternalId());
+                process.markHeld(hold.holdId(), hold.reservationProcessId(), hold.expiresAt(), clock.instant());
+                return save(process);
+            } catch (CatedraRequestRejectedException e) {
+                throw fail(process, e);
+            } catch (CatedraUnavailableException e) {
+                logNoAnswer(process, "creating the hold", attempt, e);
+                outcomeUnknown = true;
+                lastFailure = e;
+            }
         }
-        process.markHeld(hold.holdId(), hold.reservationProcessId(), hold.expiresAt(), clock.instant());
-        return save(process);
+        throw new ReservationPendingException(process.getId(), lastFailure);
     }
 
-    private ReservationProcess confirm(ReservationProcess process, User user) {
-        // The hold only lives until expiresAt (section 9): confirming it later can only fail.
-        if (process.isExpiredAt(clock.instant())) {
-            throw expire(process);
-        }
-        process.markConfirming(clock.instant());
-        process = save(process);
-        HoldConfirmation confirmation;
+    // The contract has no way to read a hold, so the occupancy of the slot is the only evidence (section 8). A free
+    // slot proves the hold was not created and it can be requested again without duplicating it. A held slot may be
+    // ours or someone else's: requesting again would answer SLOT_ALREADY_HELD either way, so the process stays
+    // pending until the cátedra releases the slot at the expiresAt of that hold.
+    private void ensureTheSlotHasNoHold(ReservationProcess process, CatedraUnavailableException cause) {
+        Optional<Occupancy> occupancy;
         try {
-            confirmation = catedraRepository.confirmHold(process.getHoldId(), process.getUserExternalId(),
-                    user.firstName(), user.lastName());
-        } catch (CatedraRequestRejectedException e) {
-            if (RESERVATION_PROCESS_ALREADY_CONFIRMED.equals(e.getCode())) {
-                // An earlier confirmation of this same process reached the cátedra.
-                process.markWaitingForPhone(null, clock.instant());
-                return save(process);
-            }
-            if (HOLD_EXPIRED.equals(e.getCode())) {
+            occupancy = catedraRepository.findOccupancies(process.getProfessionalId(), process.getDate(),
+                            process.getDate()).stream()
+                    .filter(slot -> slot.date().equals(process.getDate())
+                            && slot.startTime().equals(process.getStartTime()))
+                    .findFirst();
+        } catch (CatedraUnavailableException | CatedraRequestRejectedException e) {
+            log.warn("Could not reconcile the hold of reservation process {}", process.getId(), e);
+            throw new ReservationPendingException(process.getId(), e);
+        }
+        if (occupancy.isEmpty()) {
+            log.info("Slot of reservation process {} is free: requesting the hold again", process.getId());
+            return;
+        }
+        if (occupancy.get().status() == OccupancyStatus.CONFIRMED) {
+            process.markFailed(SLOT_ALREADY_RESERVED, clock.instant());
+            save(process);
+            throw new ReservationRejectedException(SLOT_ALREADY_RESERVED, cause);
+        }
+        log.warn("Slot of reservation process {} is held until {} and the hold may be ours: it stays pending",
+                process.getId(), occupancy.get().expiresAt());
+        throw new ReservationPendingException(process.getId(), cause);
+    }
+
+    // outcomeUnknown: an earlier confirmation got no answer, so it may have reached the cátedra.
+    private ReservationProcess confirm(ReservationProcess process, User user, boolean outcomeUnknown) {
+        CatedraUnavailableException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            // The hold only lives until expiresAt (section 9): confirming it later can only fail.
+            if (process.isExpiredAt(clock.instant())) {
                 throw expire(process);
             }
-            throw fail(process, e);
-        } catch (CatedraUnavailableException e) {
-            throw pending(process, "confirming the hold", e);
+            if (outcomeUnknown) {
+                if (theConfirmationArrived(process)) {
+                    process.markWaitingForPhone(null, clock.instant());
+                    return save(process);
+                }
+            } else {
+                process.markConfirming(clock.instant());
+                process = save(process);
+            }
+            try {
+                HoldConfirmation confirmation = catedraRepository.confirmHold(process.getHoldId(),
+                        process.getUserExternalId(), user.firstName(), user.lastName());
+                process.markWaitingForPhone(confirmation.expiresAt(), clock.instant());
+                return save(process);
+            } catch (CatedraRequestRejectedException e) {
+                if (RESERVATION_PROCESS_ALREADY_CONFIRMED.equals(e.getCode())) {
+                    // An earlier confirmation of this same process reached the cátedra.
+                    process.markWaitingForPhone(null, clock.instant());
+                    return save(process);
+                }
+                if (HOLD_EXPIRED.equals(e.getCode())) {
+                    throw expire(process);
+                }
+                throw fail(process, e);
+            } catch (CatedraUnavailableException e) {
+                logNoAnswer(process, "confirming the hold", attempt, e);
+                outcomeUnknown = true;
+                lastFailure = e;
+            }
         }
-        process.markWaitingForPhone(confirmation.expiresAt(), clock.instant());
-        return save(process);
+        throw new ReservationPendingException(process.getId(), lastFailure);
+    }
+
+    // The cátedra creates the reservation PHONE_PENDING when it accepts the confirmation (section 10), and it can only
+    // be found by patient and date (section 11). If it is not there, confirming again cannot duplicate it: a
+    // confirmation that arrives in between is answered with RESERVATION_PROCESS_ALREADY_CONFIRMED.
+    private boolean theConfirmationArrived(ReservationProcess process) {
+        String reservationProcessId = process.getReservationProcessId();
+        try {
+            boolean arrived = catedraRepository.findAppointments(process.getUserExternalId(), process.getDate(),
+                            process.getDate()).stream()
+                    .anyMatch(appointment -> reservationProcessId.equals(appointment.reservationProcessId())
+                            && (appointment.status() == AppointmentStatus.PHONE_PENDING
+                            || appointment.status() == AppointmentStatus.CONFIRMED));
+            log.info("Confirmation of reservation process {} {} the catedra", process.getId(),
+                    arrived ? "reached" : "did not reach");
+            return arrived;
+        } catch (CatedraUnavailableException | CatedraRequestRejectedException e) {
+            log.warn("Could not reconcile the confirmation of reservation process {}", process.getId(), e);
+            throw new ReservationPendingException(process.getId(), e);
+        }
     }
 
     private RuntimeException expire(ReservationProcess process) {
@@ -151,10 +233,10 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
         return new UnexpectedCatedraRejectionException(e.getCode(), e);
     }
 
-    private RuntimeException pending(ReservationProcess process, String operation, CatedraUnavailableException e) {
-        log.warn("No answer from the catedra {} of reservation process {} in {}",
-                operation, process.getId(), process.getStatus(), e);
-        return new ReservationPendingException(process.getId(), e);
+    private static void logNoAnswer(ReservationProcess process, String operation, int attempt,
+                                    CatedraUnavailableException e) {
+        log.warn("No answer from the catedra {} of reservation process {} in {} (attempt {} of {})",
+                operation, process.getId(), process.getStatus(), attempt, MAX_ATTEMPTS, e);
     }
 
     private ReservationProcess save(ReservationProcess process) {

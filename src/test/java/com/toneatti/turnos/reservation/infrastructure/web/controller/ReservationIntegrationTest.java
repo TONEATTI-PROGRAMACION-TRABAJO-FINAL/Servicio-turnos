@@ -51,12 +51,20 @@ class ReservationIntegrationTest {
     private static final Duration READ_TIMEOUT = Duration.ofMillis(500);
     private static final String HOLDS_PATH = "/api/appointment-holds";
     private static final String CONFIRM_PATH = HOLDS_PATH + "/hold-6c0c2f41/confirm";
+    private static final String OCCUPANCIES_PATH = "/api/appointment-occupancies";
+    private static final String APPOINTMENTS_PATH = "/api/appointments";
+    // Longer than the read timeout: the request reaches the cátedra but its answer is lost.
+    private static final Duration TIMEOUT = READ_TIMEOUT.multipliedBy(4);
     private static final String SLOT = """
             {"professionalId":15,"date":"2099-09-14","startTime":"09:30"}
             """;
     private static final String HOLD = """
             {"holdId":"hold-6c0c2f41","reservationProcessId":"process-a92b47d0","status":"HELD",
              "expiresAt":"2099-09-10T14:44:50Z"}
+            """;
+    private static final String HELD_SLOT = """
+            {"occupancies":[{"date":"2099-09-14","startTime":"09:30:00","status":"HELD",
+              "expiresAt":"2099-09-10T14:44:50Z"}]}
             """;
     private static final String CONFIRMATION = """
             {"reservationProcessId":"process-a92b47d0","status":"WAITING_FOR_PHONE","expiresAt":"2099-09-10T14:50:00Z"}
@@ -219,15 +227,104 @@ class ReservationIntegrationTest {
         assertTheProcessIs(ReservationStatus.PENDING_HOLD);
     }
 
+    // Section 18.4: the hold timed out, the slot is still free, so it is requested again.
     @Test
-    void answers503PendingWhenTheHoldTimesOutAndDoesNotRepeatIt() throws Exception {
-        CATEDRA.respondAfter(HOLDS_PATH, READ_TIMEOUT.multipliedBy(4), 201, HOLD);
+    void requestsTheHoldAgainAfterATimeoutWhenTheSlotIsFree() throws Exception {
+        CATEDRA.respondOnceAfter(HOLDS_PATH, TIMEOUT, 201, HOLD);
+        givenTheCatedraHoldsAndConfirms();
+        CATEDRA.respond(OCCUPANCIES_PATH, 200, "{\"occupancies\":[]}");
 
-        expectProblem(startReservation(SLOT), 503, "RESERVATION_PENDING");
+        startReservation(SLOT)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_PHONE"));
+        assertThat(CATEDRA.requestCount(OCCUPANCIES_PATH)).isEqualTo(1);
+        assertThat(CATEDRA.requestCount(HOLDS_PATH)).isEqualTo(2);
+    }
+
+    // The timed out hold may be the one that now occupies the slot: it is not requested again.
+    @Test
+    void answers503PendingAfterATimeoutWhenTheSlotIsHeld() throws Exception {
+        CATEDRA.respondAfter(HOLDS_PATH, TIMEOUT, 201, HOLD);
+        CATEDRA.respond(OCCUPANCIES_PATH, 200, HELD_SLOT);
+
+        expectProblem(startReservation(SLOT), 503, "RESERVATION_PENDING")
+                .andExpect(jsonPath("$.reservationId").isNumber());
         expectProblem(startReservation(SLOT), 503, "RESERVATION_PENDING");
 
         assertThat(CATEDRA.requestCount(HOLDS_PATH)).isEqualTo(1);
+        assertThat(CATEDRA.requestCount(OCCUPANCIES_PATH)).isEqualTo(2);
         assertTheProcessIs(ReservationStatus.PENDING_HOLD);
+    }
+
+    @Test
+    void resumesAPendingHoldOnceTheSlotIsFree() throws Exception {
+        CATEDRA.respondOnceAfter(HOLDS_PATH, TIMEOUT, 201, HOLD);
+        CATEDRA.respondOnce(OCCUPANCIES_PATH, 200, HELD_SLOT);
+        expectProblem(startReservation(SLOT), 503, "RESERVATION_PENDING");
+        givenTheCatedraHoldsAndConfirms();
+        CATEDRA.respond(OCCUPANCIES_PATH, 200, "{\"occupancies\":[]}");
+
+        startReservation(SLOT)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_PHONE"));
+        assertThat(CATEDRA.requestCount(HOLDS_PATH)).isEqualTo(2);
+    }
+
+    // The confirmation timed out but reached the cátedra: it is not sent again.
+    @Test
+    void doesNotConfirmAgainAfterATimeoutWhenTheReservationExists() throws Exception {
+        CATEDRA.respond(HOLDS_PATH, 201, HOLD);
+        CATEDRA.respondAfter(CONFIRM_PATH, TIMEOUT, 202, CONFIRMATION);
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, """
+                [{"reservationId":8251,"reservationProcessId":"process-a92b47d0","externalPatientId":"%s",
+                  "appointmentDate":"2099-09-14","startTime":"09:30:00","professionalId":15,"status":"PHONE_PENDING"}]
+                """.formatted(userExternalId));
+
+        startReservation(SLOT)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_PHONE"))
+                .andExpect(jsonPath("$.expiresAt").value("2099-09-10T14:44:50Z"));
+        assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isEqualTo(1);
+        assertThat(CATEDRA.lastRequestUri().getQuery()).startsWith("externalPatientId=" + userExternalId);
+    }
+
+    @Test
+    void confirmsAgainAfterATimeoutWhenTheReservationDoesNotExist() throws Exception {
+        CATEDRA.respondOnceAfter(CONFIRM_PATH, TIMEOUT, 202, CONFIRMATION);
+        givenTheCatedraHoldsAndConfirms();
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        startReservation(SLOT)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_PHONE"));
+        assertThat(CATEDRA.requestCount(APPOINTMENTS_PATH)).isEqualTo(1);
+        assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isEqualTo(2);
+    }
+
+    // The first confirmation arrived after the reservations were read: the repeated one finds it confirmed.
+    @Test
+    void confirmsWhenTheRepeatedConfirmationFindsItAlreadyConfirmed() throws Exception {
+        CATEDRA.respond(HOLDS_PATH, 201, HOLD);
+        CATEDRA.respondOnceAfter(CONFIRM_PATH, TIMEOUT, 202, CONFIRMATION);
+        CATEDRA.respondProblem(CONFIRM_PATH, 409, "RESERVATION_PROCESS_ALREADY_CONFIRMED");
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        startReservation(SLOT)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_PHONE"));
+        assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isEqualTo(2);
+    }
+
+    @Test
+    void answers503PendingWhenEveryConfirmationTimesOut() throws Exception {
+        CATEDRA.respond(HOLDS_PATH, 201, HOLD);
+        CATEDRA.respondAfter(CONFIRM_PATH, TIMEOUT, 202, CONFIRMATION);
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        expectProblem(startReservation(SLOT), 503, "RESERVATION_PENDING");
+
+        assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isEqualTo(2);
+        assertTheProcessIs(ReservationStatus.CONFIRMING);
     }
 
     @Test

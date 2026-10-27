@@ -2,8 +2,12 @@ package com.toneatti.turnos.reservation.application.usecases;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
+import com.toneatti.turnos.catedra.domain.model.Occupancy;
+import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
@@ -48,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -180,21 +185,114 @@ class StartReservationUseCaseImplTest {
     }
 
     @Test
-    void staysPendingTheHoldWhenTheCatedraDoesNotAnswer() {
+    void requestsTheHoldAgainWhenTheSlotIsStillFree() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenThrow(unavailable()).thenReturn(HOLD);
+        givenTheOccupancies(new Occupancy(DAY, NINE_THIRTY.plusMinutes(30), OccupancyStatus.HELD, EXPIRES_AT));
+        givenTheConfirmation();
+
+        assertThat(start().process().getStatus()).isEqualTo(WAITING_FOR_PHONE);
+        verify(catedraRepository, times(2)).createHold(15L, DAY, NINE_THIRTY, USER_ID);
+    }
+
+    @Test
+    void staysPendingTheHoldWhenTheSlotIsHeldBecauseTheHoldMayBeOurs() {
         givenTheUser();
         when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenThrow(unavailable());
+        givenTheOccupancies(new Occupancy(DAY, NINE_THIRTY, OccupancyStatus.HELD, EXPIRES_AT));
 
         assertThatStartingFails().isInstanceOfSatisfying(ReservationPendingException.class, e ->
                 assertThat(e.getId()).isEqualTo(processes.only().getId()));
         assertThat(processes.only().getStatus()).isEqualTo(PENDING_HOLD);
+        verify(catedraRepository, times(1)).createHold(any(), any(), any(), any());
     }
 
     @Test
-    void staysConfirmingWhenTheConfirmationGetsNoAnswer() {
+    void failsAsReservedWhenTheSlotOfAHoldWithoutAnswerIsConfirmed() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenThrow(unavailable());
+        givenTheOccupancies(new Occupancy(DAY, NINE_THIRTY, OccupancyStatus.CONFIRMED, null));
+
+        assertThatStartingFails().isInstanceOfSatisfying(ReservationRejectedException.class, e ->
+                assertThat(e.getCode()).isEqualTo("SLOT_ALREADY_RESERVED"));
+        assertTheProcessFailedWith("SLOT_ALREADY_RESERVED");
+    }
+
+    @Test
+    void staysPendingTheHoldWhenTheOccupanciesCannotBeRead() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenThrow(unavailable());
+        when(catedraRepository.findOccupancies(15L, DAY, DAY)).thenThrow(unavailable());
+
+        assertThatStartingFails().isInstanceOf(ReservationPendingException.class);
+        assertThat(processes.only().getStatus()).isEqualTo(PENDING_HOLD);
+        verify(catedraRepository, times(1)).createHold(any(), any(), any(), any());
+    }
+
+    @Test
+    void requestsTheHoldAtMostTwiceInARequest() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenThrow(unavailable());
+
+        assertThatStartingFails().isInstanceOf(ReservationPendingException.class);
+        assertThat(processes.only().getStatus()).isEqualTo(PENDING_HOLD);
+        verify(catedraRepository, times(StartReservationUseCaseImpl.MAX_ATTEMPTS))
+                .createHold(any(), any(), any(), any());
+    }
+
+    @Test
+    void doesNotConfirmAgainWhenTheReservationAlreadyExists() {
+        givenAHoldWhoseConfirmationFailsWith(unavailable());
+        givenTheAppointments(appointment("process-a92b47d0", AppointmentStatus.PHONE_PENDING));
+
+        ReservationProcess process = start().process();
+
+        assertThat(process.getStatus()).isEqualTo(WAITING_FOR_PHONE);
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        verify(catedraRepository, times(1)).confirmHold(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void confirmsAgainWhenTheReservationDoesNotExist() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenReturn(HOLD);
+        when(catedraRepository.confirmHold(HOLD_ID, USER_ID, "Juan", "Perez")).thenThrow(unavailable())
+                .thenReturn(new HoldConfirmation("process-a92b47d0", EXPIRES_AT.plusSeconds(60)));
+        // A reservation of another process of the same patient and day is not this one.
+        givenTheAppointments(appointment("process-other", AppointmentStatus.CONFIRMED));
+
+        assertThat(start().process().getExpiresAt()).isEqualTo(EXPIRES_AT.plusSeconds(60));
+        verify(catedraRepository, times(2)).confirmHold(HOLD_ID, USER_ID, "Juan", "Perez");
+    }
+
+    @Test
+    void waitsForThePhoneWhenTheRepeatedConfirmationFindsItAlreadyConfirmed() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenReturn(HOLD);
+        when(catedraRepository.confirmHold(HOLD_ID, USER_ID, "Juan", "Perez")).thenThrow(unavailable())
+                .thenThrow(rejection("RESERVATION_PROCESS_ALREADY_CONFIRMED"));
+
+        assertThat(start().process().getStatus()).isEqualTo(WAITING_FOR_PHONE);
+    }
+
+    @Test
+    void staysConfirmingWhenTheReservationsCannotBeRead() {
+        givenAHoldWhoseConfirmationFailsWith(unavailable());
+        when(catedraRepository.findAppointments(USER_ID, DAY, DAY)).thenThrow(unavailable());
+
+        assertThatStartingFails().isInstanceOf(ReservationPendingException.class);
+        assertThat(processes.only().getStatus()).isEqualTo(CONFIRMING);
+        verify(catedraRepository, times(1)).confirmHold(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void confirmsAtMostTwiceInARequest() {
         givenAHoldWhoseConfirmationFailsWith(unavailable());
 
         assertThatStartingFails().isInstanceOf(ReservationPendingException.class);
         assertThat(processes.only().getStatus()).isEqualTo(CONFIRMING);
+        verify(catedraRepository, times(StartReservationUseCaseImpl.MAX_ATTEMPTS))
+                .confirmHold(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -233,19 +331,69 @@ class StartReservationUseCaseImplTest {
         verifyNoInteractions(catedraRepository);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"PENDING_HOLD", "CONFIRMING"})
-    void doesNotRepeatACallWhoseOutcomeIsUnknown(ReservationStatus status) {
+    @Test
+    void resumesAPendingHoldByCheckingTheSlotFirst() {
         givenTheUser();
-        processes.storedIn(status, EXPIRES_AT);
+        processes.storedIn(PENDING_HOLD, null);
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenReturn(HOLD);
+        givenTheConfirmation();
+
+        StartedReservation started = start();
+
+        assertThat(started.resumed()).isTrue();
+        assertThat(started.process().getStatus()).isEqualTo(WAITING_FOR_PHONE);
+        verify(catedraRepository).findOccupancies(15L, DAY, DAY);
+    }
+
+    @Test
+    void doesNotRequestAgainAPendingHoldWhoseSlotIsHeld() {
+        givenTheUser();
+        processes.storedIn(PENDING_HOLD, null);
+        givenTheOccupancies(new Occupancy(DAY, NINE_THIRTY, OccupancyStatus.HELD, EXPIRES_AT));
 
         assertThatStartingFails().isInstanceOf(ReservationPendingException.class);
-        assertThat(processes.only().getStatus()).isEqualTo(status);
+        verify(catedraRepository, never()).createHold(any(), any(), any(), any());
+    }
+
+    @Test
+    void resumesAConfirmationThatReachedTheCatedraWithoutConfirmingAgain() {
+        givenTheUser();
+        processes.storedIn(CONFIRMING, EXPIRES_AT);
+        givenTheAppointments(appointment("process-a92b47d0", AppointmentStatus.PHONE_PENDING));
+
+        assertThat(start().process().getStatus()).isEqualTo(WAITING_FOR_PHONE);
+        verify(catedraRepository, never()).confirmHold(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void expiresAConfirmingProcessWhoseHoldAlreadyExpiredWithoutCallingTheCatedra() {
+        givenTheUser();
+        processes.storedIn(CONFIRMING, NOW);
+
+        assertThatStartingFails().isInstanceOf(HoldExpiredException.class);
+        assertThat(processes.only().getStatus()).isEqualTo(EXPIRED);
         verifyNoInteractions(catedraRepository);
     }
 
     private void givenTheUser() {
         when(userRepository.findByExternalId(USER_ID)).thenReturn(Optional.of(USER));
+    }
+
+    private void givenTheConfirmation() {
+        when(catedraRepository.confirmHold(HOLD_ID, USER_ID, "Juan", "Perez"))
+                .thenReturn(new HoldConfirmation("process-a92b47d0", EXPIRES_AT));
+    }
+
+    private void givenTheOccupancies(Occupancy... occupancies) {
+        when(catedraRepository.findOccupancies(15L, DAY, DAY)).thenReturn(List.of(occupancies));
+    }
+
+    private void givenTheAppointments(Appointment... appointments) {
+        when(catedraRepository.findAppointments(USER_ID, DAY, DAY)).thenReturn(List.of(appointments));
+    }
+
+    private static Appointment appointment(String reservationProcessId, AppointmentStatus status) {
+        return new Appointment(8251L, reservationProcessId, USER_ID, 15L, DAY, NINE_THIRTY, status);
     }
 
     private void givenAHoldWhoseConfirmationFailsWith(RuntimeException failure) {
