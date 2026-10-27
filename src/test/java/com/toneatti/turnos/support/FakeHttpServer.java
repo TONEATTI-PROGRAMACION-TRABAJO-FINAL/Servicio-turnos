@@ -86,6 +86,13 @@ public final class FakeHttpServer implements AutoCloseable {
     }
 
     /**
+     * A rejection with a functional code, as the cátedra answers it (section 13 of the integration contract).
+     */
+    public void respondProblem(String path, int status, String code) {
+        respond(path, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
+    }
+
+    /**
      * Answers the next request to that path only, before the canned response. Several calls queue up, so a test can
      * script a timeout followed by a success.
      */
@@ -123,6 +130,15 @@ public final class FakeHttpServer implements AutoCloseable {
     public int requestCount(String path) {
         AtomicInteger count = requestCounts.get(path);
         return count == null ? 0 : count.get();
+    }
+
+    /**
+     * Forgets the responses and the request counts, for a server shared by the tests of a class.
+     */
+    public void reset() {
+        responses.clear();
+        oneShotResponses.clear();
+        requestCounts.clear();
     }
 
     @Override

@@ -145,7 +145,7 @@ class RestCatedraRepositoryAdapterTest {
 
     @Test
     void failsAsRejectedWhenTheIntegrationIsNotFound() {
-        catedra.respond(OCCUPANCIES_PATH, 403, "{\"status\":403,\"code\":\"STUDENT_INTEGRATION_NOT_FOUND\"}");
+        catedra.respondProblem(OCCUPANCIES_PATH, 403, "STUDENT_INTEGRATION_NOT_FOUND");
 
         assertThatFindingTheOccupanciesOfADayFails()
                 .isInstanceOfSatisfying(CatedraRequestRejectedException.class, e ->
@@ -270,7 +270,7 @@ class RestCatedraRepositoryAdapterTest {
             "409, SLOT_ALREADY_HELD"
     })
     void failsAsRejectedWithEachCodeOfCreatingAHold(int status, String code) {
-        respondProblem(HOLDS_PATH, status, code);
+        catedra.respondProblem(HOLDS_PATH, status, code);
 
         assertRejectedWith(assertThatCreatingAHoldFails(), status, code, "POST " + HOLDS_PATH);
     }
@@ -330,7 +330,7 @@ class RestCatedraRepositoryAdapterTest {
             "409, RESERVATION_PROCESS_ALREADY_CONFIRMED"
     })
     void failsAsRejectedWithEachCodeOfConfirmingAHold(int status, String code) {
-        respondProblem(CONFIRM_PATH, status, code);
+        catedra.respondProblem(CONFIRM_PATH, status, code);
 
         assertRejectedWith(assertThatConfirmingAHoldFails(), status, code,
                 "POST " + HOLDS_PATH + "/{holdId}/confirm");
@@ -398,7 +398,7 @@ class RestCatedraRepositoryAdapterTest {
             "400, INVALID_DATE_RANGE"
     })
     void failsAsRejectedWithEachCodeOfFindingAppointments(int status, String code) {
-        respondProblem(APPOINTMENTS_PATH, status, code);
+        catedra.respondProblem(APPOINTMENTS_PATH, status, code);
 
         assertRejectedWith(assertThatFindingTheAppointmentsOfADayFails(), status, code, "GET " + APPOINTMENTS_PATH);
     }
@@ -424,10 +424,6 @@ class RestCatedraRepositoryAdapterTest {
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheAppointmentsOfADayFails() {
         return assertThatThrownBy(() -> adapter.findAppointments(PATIENT, DAY, DAY));
-    }
-
-    private void respondProblem(String path, int status, String code) {
-        catedra.respond(path, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
     }
 
     private static void assertRejectedWith(AbstractThrowableAssert<?, ? extends Throwable> failure,
