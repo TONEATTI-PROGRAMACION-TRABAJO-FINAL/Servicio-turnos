@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -27,8 +28,7 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
     public ReservationProcess create(ReservationProcess process) {
         ReservationProcessEntity entity = reservationProcessMapper.toEntity(process);
         try {
-            ReservationProcessEntity savedEntity = jpaReservationProcessRepository.saveAndFlush(entity);
-            return reservationProcessMapper.toDomainModel(savedEntity);
+            return saveAndMap(entity);
         } catch (DataIntegrityViolationException e) {
             // Two concurrent requests for the same slot can both find no active process; the unique constraint decides.
             if (findActiveByUserAndSlot(process.getUserExternalId(), process.getProfessionalId(),
@@ -43,17 +43,26 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
     // overwriting it: the calls to the cátedra between reading and saving can take seconds.
     @Override
     public Optional<ReservationProcess> update(Long id, ReservationProcess process) {
+        // The mapper turns a null process into a null entity, which would fail further down without saying why.
+        Objects.requireNonNull(process, "process");
         if (!jpaReservationProcessRepository.existsById(id)) {
             return Optional.empty();
         }
         ReservationProcessEntity entity = reservationProcessMapper.toEntity(process);
         entity.setId(id);
         try {
-            ReservationProcessEntity savedEntity = jpaReservationProcessRepository.saveAndFlush(entity);
-            return Optional.of(reservationProcessMapper.toDomainModel(savedEntity));
+            return Optional.of(saveAndMap(entity));
         } catch (OptimisticLockingFailureException e) {
             throw new ConcurrentReservationUpdateException(id, e);
         }
+    }
+
+    // Spring Data never returns null from saveAndFlush. Stating it also tells static analysis that the mapper, which
+    // only returns null for a null entity, cannot return null here.
+    private ReservationProcess saveAndMap(ReservationProcessEntity entity) {
+        ReservationProcessEntity savedEntity = Objects.requireNonNull(
+                jpaReservationProcessRepository.saveAndFlush(entity), "saveAndFlush returned null");
+        return reservationProcessMapper.toDomainModel(savedEntity);
     }
 
     @Override
