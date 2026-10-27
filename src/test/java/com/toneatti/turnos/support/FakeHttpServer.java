@@ -14,13 +14,17 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Stand-in for an HTTP service consumed by this one (Servicio-catalogo or the cátedra) on a free local port,
  * built on the JDK HTTP server.
- * Each path answers with the canned response registered for it; unknown paths answer 404.
+ * Each path answers first with its one-shot responses, in the order they were registered, and then with the canned
+ * response registered for it; unknown paths answer 404.
  */
 public final class FakeHttpServer implements AutoCloseable {
 
@@ -32,8 +36,11 @@ public final class FakeHttpServer implements AutoCloseable {
 
     private final HttpServer server;
     private final Map<String, CannedResponse> responses = new ConcurrentHashMap<>();
+    private final Map<String, Queue<CannedResponse>> oneShotResponses = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> requestCounts = new ConcurrentHashMap<>();
     private volatile URI lastRequestUri;
     private volatile Headers lastRequestHeaders;
+    private volatile String lastRequestBody;
 
     private FakeHttpServer(HttpServer server) {
         this.server = server;
@@ -78,6 +85,19 @@ public final class FakeHttpServer implements AutoCloseable {
         responses.put(path, new CannedResponse(status, body, delay));
     }
 
+    /**
+     * Answers the next request to that path only, before the canned response. Several calls queue up, so a test can
+     * script a timeout followed by a success.
+     */
+    public void respondOnce(String path, int status, String body) {
+        respondOnceAfter(path, Duration.ZERO, status, body);
+    }
+
+    public void respondOnceAfter(String path, Duration delay, int status, String body) {
+        oneShotResponses.computeIfAbsent(path, ignored -> new ConcurrentLinkedQueue<>())
+                .add(new CannedResponse(status, body, delay));
+    }
+
     public URI lastRequestUri() {
         return lastRequestUri;
     }
@@ -89,6 +109,22 @@ public final class FakeHttpServer implements AutoCloseable {
         return lastRequestHeaders.getFirst(name);
     }
 
+    /**
+     * Body of the last request, empty when it had none.
+     */
+    public String lastRequestBody() {
+        return lastRequestBody;
+    }
+
+    /**
+     * Requests received for that path, including the ones the client gave up on, so a test can check that an
+     * operation with effects was not repeated.
+     */
+    public int requestCount(String path) {
+        AtomicInteger count = requestCounts.get(path);
+        return count == null ? 0 : count.get();
+    }
+
     @Override
     public void close() {
         server.stop(0);
@@ -97,7 +133,12 @@ public final class FakeHttpServer implements AutoCloseable {
     private void handle(HttpExchange exchange) throws IOException {
         lastRequestUri = exchange.getRequestURI();
         lastRequestHeaders = exchange.getRequestHeaders();
-        CannedResponse response = responses.getOrDefault(exchange.getRequestURI().getPath(),
+        lastRequestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String path = exchange.getRequestURI().getPath();
+        requestCounts.computeIfAbsent(path, ignored -> new AtomicInteger()).incrementAndGet();
+        Queue<CannedResponse> oneShot = oneShotResponses.get(path);
+        CannedResponse queued = oneShot == null ? null : oneShot.poll();
+        CannedResponse response = queued != null ? queued : responses.getOrDefault(path,
                 new CannedResponse(404, "{\"status\":404,\"title\":\"Not Found\"}", Duration.ZERO));
         try {
             Thread.sleep(response.delay());
