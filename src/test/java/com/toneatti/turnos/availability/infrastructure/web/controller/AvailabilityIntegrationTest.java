@@ -14,6 +14,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import static com.toneatti.turnos.support.ProblemAssertions.expectProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -104,7 +105,7 @@ class AvailabilityIntegrationTest {
     @Test
     void answers400WithInvalidDateRangeWhenTheCatedraRejectsTheRange() throws Exception {
         givenAnEnabledProfessional(17, MONDAY_SCHEDULE.replace("15", "17"));
-        CATEDRA.respond(OCCUPANCIES_PATH, 400, "{\"status\":400,\"code\":\"INVALID_DATE_RANGE\"}");
+        CATEDRA.respondProblem(OCCUPANCIES_PATH, 400, "INVALID_DATE_RANGE");
 
         expectProblem(availableSlots("17", "2099-09-14", "2099-09-14"), 400, "INVALID_DATE_RANGE");
     }
@@ -164,14 +165,6 @@ class AvailabilityIntegrationTest {
     private ResultActions availableSlots(String professionalId, String from, String to) throws Exception {
         return mockMvc.perform(get("/available-slots").with(jwt())
                 .param("professionalId", professionalId).param("from", from).param("to", to));
-    }
-
-    private static ResultActions expectProblem(ResultActions result, int status, String code) throws Exception {
-        return result
-                .andExpect(status().is(status))
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.status").value(status))
-                .andExpect(jsonPath("$.code").value(code));
     }
 
     private static void givenAnEnabledProfessional(int id, String weeklySchedules) {

@@ -65,3 +65,95 @@ Cada hash tarda unos 30 ms. El hash guardado incluye sus parámetros (`$argon2id
 Al registrarse, la contraseña debe tener entre 8 y 128 caracteres; el login también rechaza más de 128. El máximo solo evita que contraseñas enormes encarezcan cada hash. Si no se cumple, la respuesta es un `400` en `application/problem+json`.
 
 La base es H2 en memoria, así que no hay hashes BCrypt viejos que migrar: al reiniciar, todos los usuarios se registran de nuevo con Argon2id.
+
+## Reservas
+
+Un usuario autenticado inicia una reserva eligiendo un slot. El servicio pide el hold a la cátedra (`POST /api/appointment-holds`) y lo confirma enseguida (`POST /api/appointment-holds/{holdId}/confirm`), porque entre los dos pasos la app no tiene nada que agregar. El paso del teléfono (Kafka) llega después.
+
+El paciente es siempre el usuario del JWT: el `externalPatientId` es su `externalId` (el `sub` del token) y el nombre y el apellido salen de su registro. Lo que mande la app en esos campos se ignora.
+
+### Endpoints
+
+Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
+
+`POST /reservations`
+
+```json
+{ "professionalId": 15, "date": "2026-09-14", "startTime": "09:30" }
+```
+
+| Respuesta | Cuándo |
+| --- | --- |
+| `201 Created` con `Location: /reservations/{id}` | Se creó el proceso y quedó esperando el teléfono |
+| `200 OK` | El usuario ya tenía un proceso activo para ese slot y se continuó ese (un doble toque o un reintento no piden otro hold) |
+
+```json
+{
+  "id": 7,
+  "professionalId": 15,
+  "date": "2026-09-14",
+  "startTime": "09:30",
+  "status": "WAITING_FOR_PHONE",
+  "expiresAt": "2026-09-10T14:44:50Z",
+  "createdAt": "2026-09-10T14:30:00Z"
+}
+```
+
+`GET /reservations/{id}` devuelve el mismo cuerpo. Solo encuentra los procesos del usuario: el de otro usuario responde `404` como si no existiera. No llama a la cátedra.
+
+Los ids de la cátedra (`holdId`, `reservationProcessId`) se guardan pero no se exponen.
+
+### Estados
+
+```
+PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE
+     │            │           │
+     └──▶ FAILED ◀┴───────────┤
+                  └──▶ EXPIRED ◀┘
+```
+
+| Estado | Significado |
+| --- | --- |
+| `PENDING_HOLD` | Se pidió el hold y todavía no se sabe si existe |
+| `HELD` | La cátedra creó el hold |
+| `CONFIRMING` | Se pidió la confirmación y todavía no se sabe si llegó |
+| `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt` |
+| `FAILED` | La cátedra rechazó el hold o la confirmación (se guarda su `code`) |
+| `EXPIRED` | El hold venció antes de confirmarse |
+
+`FAILED` y `EXPIRED` son finales: una respuesta tardía no los reabre, y el usuario puede iniciar otra reserva para el mismo slot. Cada estado se guarda **antes** de la llamada a la cátedra que lo deja, así que después de un timeout queda registrado qué pudo haber pasado. La vigencia del hold es la `expiresAt` de la cátedra; si ya pasó, el proceso se marca `EXPIRED` sin volver a llamarla.
+
+Un usuario tiene como máximo un proceso activo por slot (profesional, fecha y hora). Lo garantiza una restricción única en `reservation_processes` sobre `(user_external_id, professional_id, slot_date, start_time, active)`, donde `active` vale `TRUE` mientras el proceso no es final y `NULL` después: la restricción trata los `NULL` como distintos, así que admite cualquier cantidad de procesos terminados y uno solo activo.
+
+### Errores
+
+Todos en `application/problem+json` con un `code` estable, la misma convención de la cátedra.
+
+| HTTP | `code` | Cuándo |
+| --- | --- | --- |
+| `400` | `VALIDATION_ERROR` | Falta un campo, el id no es positivo o una fecha u hora tiene otro formato |
+| `400` | `SLOT_IN_THE_PAST` | El slot ya empezó |
+| `400` | `PROFESSIONAL_DISABLED` | La cátedra rechazó el hold: profesional deshabilitado |
+| `400` | `INVALID_SLOT` | La cátedra rechazó el hold o la confirmación: el slot no está en la agenda |
+| `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no conoce al profesional |
+| `404` | `USER_NOT_FOUND` | El usuario del token ya no existe |
+| `404` | `RESERVATION_NOT_FOUND` | `GET` de un proceso inexistente o de otro usuario |
+| `409` | `SLOT_ALREADY_RESERVED` | El slot ya tiene una reserva confirmada |
+| `409` | `SLOT_ALREADY_HELD` | El slot tiene un hold activo de otro proceso |
+| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento |
+| `410` | `HOLD_EXPIRED` | El hold venció antes de confirmarse |
+| `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
+| `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
+| `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT` |
+| `503` | `RESERVATION_PENDING` | La cátedra no respondió y no se sabe si la operación tuvo efecto; incluye `reservationId`. Repetir el mismo `POST` continúa ese proceso |
+
+`RESERVATION_PROCESS_ALREADY_CONFIRMED` no llega a la app: significa que una confirmación anterior del mismo proceso sí llegó, y se trata como éxito.
+
+### Timeouts y reintentos
+
+Un timeout, un `5xx` o una respuesta ilegible no prueban que la operación haya fallado (sección 18.4 del contrato). Antes de volver a llamar, el servicio reconcilia con los datos que guardó, y en cada request hace como máximo **dos** llamadas de cada tipo. Cada intento fallido queda en el log con el id del proceso y el número de intento.
+
+- **Hold sin respuesta.** El contrato no permite leer un hold, así que se consultan las ocupaciones del slot (`GET /api/appointment-occupancies`). Si el slot está libre, el hold no se creó y se pide de nuevo. Si está `CONFIRMED`, el proceso falla con `SLOT_ALREADY_RESERVED`. Si está `HELD`, **no se puede saber si el hold es nuestro o de otro**: pedirlo otra vez respondería `SLOT_ALREADY_HELD` en ambos casos. El proceso queda en `PENDING_HOLD` y la app recibe `RESERVATION_PENDING`; cuando la cátedra libere ese hold (en su `expiresAt`), un nuevo `POST` lo pide de nuevo. Esta es una limitación del contrato, no del servicio.
+- **Confirmación sin respuesta.** Se buscan las reservas del paciente para ese día (`GET /api/appointments`). Si aparece el `reservationProcessId` del proceso, la confirmación llegó y no se repite. Si no aparece, se confirma una vez más; si la primera llegó entretanto, la cátedra responde `RESERVATION_PROCESS_ALREADY_CONFIRMED` y se toma como éxito.
+
+Los timeouts del cliente REST de la cátedra son `PT2S` de conexión y `PT5S` de lectura por defecto; `CATEDRA_CONNECT_TIMEOUT` y `CATEDRA_READ_TIMEOUT` los cambian (duración ISO-8601).

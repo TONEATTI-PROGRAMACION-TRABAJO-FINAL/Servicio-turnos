@@ -2,21 +2,34 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationRequest;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldRequest;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupanciesResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraProblemResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.mapper.CatedraRestMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -28,6 +41,12 @@ import java.util.function.Supplier;
 public class RestCatedraRepositoryAdapter implements CatedraRepository {
 
     private static final String OCCUPANCIES_PATH = "/api/appointment-occupancies";
+    private static final String HOLDS_PATH = "/api/appointment-holds";
+    private static final String CONFIRM_HOLD_PATH = HOLDS_PATH + "/{holdId}/confirm";
+    private static final String APPOINTMENTS_PATH = "/api/appointments";
+    // A patient has a handful of reservations in a few days, so the first page is enough and the pagination headers
+    // (X-Total-Count, Link) are not followed.
+    private static final int APPOINTMENTS_PAGE_SIZE = 100;
 
     private final RestClient catedraRestClient;
     private final CatedraRestMapper catedraRestMapper;
@@ -55,6 +74,61 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
             return List.of();
         }
         return body.occupancies().stream().map(catedraRestMapper::toDomainModel).toList();
+    }
+
+    @Override
+    public Hold createHold(Long professionalId, LocalDate date, LocalTime startTime, String externalPatientId) {
+        CatedraHoldResponse body = post(HOLDS_PATH,
+                new CatedraHoldRequest(professionalId, date, startTime, externalPatientId),
+                CatedraHoldResponse.class, hold -> hold.holdId() != null && hold.reservationProcessId() != null);
+        return catedraRestMapper.toDomainModel(body);
+    }
+
+    @Override
+    public HoldConfirmation confirmHold(String holdId, String externalPatientId,
+                                        String patientFirstName, String patientLastName) {
+        CatedraHoldConfirmationResponse body = post(CONFIRM_HOLD_PATH,
+                new CatedraHoldConfirmationRequest(externalPatientId, patientFirstName, patientLastName),
+                CatedraHoldConfirmationResponse.class, confirmation -> confirmation.reservationProcessId() != null,
+                holdId);
+        return catedraRestMapper.toDomainModel(body);
+    }
+
+    @Override
+    public List<Appointment> findAppointments(String externalPatientId, LocalDate from, LocalDate to) {
+        CatedraAppointmentResponse[] body = call("GET " + APPOINTMENTS_PATH, () ->
+                catedraRestClient.get()
+                        .uri(uri -> uri.path(APPOINTMENTS_PATH)
+                                .queryParam("externalPatientId", externalPatientId)
+                                .queryParam("from", from)
+                                .queryParam("to", to)
+                                .queryParam("page", 0)
+                                .queryParam("size", APPOINTMENTS_PAGE_SIZE)
+                                .build())
+                        .retrieve()
+                        .body(CatedraAppointmentResponse[].class));
+        if (body == null) {
+            return List.of();
+        }
+        return Arrays.stream(body).filter(Objects::nonNull).map(catedraRestMapper::toDomainModel).toList();
+    }
+
+    // A POST has effects in the cátedra. A success without a usable body cannot be used, and the effect may have
+    // happened, so it fails as unavailable: the caller has to reconcile as after a timeout.
+    private <T> T post(String path, Object requestBody, Class<T> responseType, Predicate<T> complete,
+                       Object... uriVariables) {
+        String request = "POST " + path;
+        T body = call(request, () ->
+                catedraRestClient.post()
+                        .uri(path, uriVariables)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestBody)
+                        .retrieve()
+                        .body(responseType));
+        if (body == null || !complete.test(body)) {
+            throw new CatedraUnavailableException("Catedra answered " + request + " without a usable body", null);
+        }
+        return body;
     }
 
     // A 4xx with a functional code is a rejection the caller can act on; everything else means the cátedra

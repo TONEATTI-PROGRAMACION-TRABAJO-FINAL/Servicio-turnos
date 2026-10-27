@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import java.time.Duration;
 
 import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.assertFailsOn;
+import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.withEnvironmentVariables;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CatedraIntegrationPropertiesTest {
@@ -45,6 +46,18 @@ class CatedraIntegrationPropertiesTest {
     @Test
     void bindsConfiguredTimeouts() {
         contextRunner.withPropertyValues("catedra.connect-timeout=PT1S", "catedra.read-timeout=PT0.5S")
+                .run(context -> {
+                    CatedraIntegrationProperties properties = context.getBean(CatedraIntegrationProperties.class);
+
+                    assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.readTimeout()).isEqualTo(Duration.ofMillis(500));
+                });
+    }
+
+    // The variables documented in application.properties and .env.example.
+    @Test
+    void bindsTheTimeoutsFromEnvironmentVariables() {
+        withEnvironmentVariables(contextRunner, "CATEDRA_CONNECT_TIMEOUT=PT1S", "CATEDRA_READ_TIMEOUT=PT0.5S")
                 .run(context -> {
                     CatedraIntegrationProperties properties = context.getBean(CatedraIntegrationProperties.class);
 

@@ -1,7 +1,14 @@
 package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
+import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupancyResponse;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +24,10 @@ class CatedraRestMapperTest {
 
     @Test
     void returnsNullForNullInput() {
-        assertThat(catedraRestMapper.toDomainModel(null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraOccupancyResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraHoldResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraHoldConfirmationResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraAppointmentResponse) null)).isNull();
     }
 
     @Test
@@ -28,5 +38,36 @@ class CatedraRestMapperTest {
         Occupancy occupancy = catedraRestMapper.toDomainModel(response);
 
         assertThat(occupancy).usingRecursiveComparison().isEqualTo(response);
+    }
+
+    @Test
+    void mapsEveryFieldOfAHold() {
+        CatedraHoldResponse response = new CatedraHoldResponse("hold-6c0c2f41", "process-a92b47d0",
+                Instant.parse("2026-09-10T14:44:50Z"));
+
+        Hold hold = catedraRestMapper.toDomainModel(response);
+
+        assertThat(hold).usingRecursiveComparison().isEqualTo(response);
+    }
+
+    @Test
+    void mapsEveryFieldOfAHoldConfirmation() {
+        CatedraHoldConfirmationResponse response = new CatedraHoldConfirmationResponse("process-a92b47d0",
+                Instant.parse("2026-09-10T14:44:50Z"));
+
+        HoldConfirmation confirmation = catedraRestMapper.toDomainModel(response);
+
+        assertThat(confirmation).usingRecursiveComparison().isEqualTo(response);
+    }
+
+    @Test
+    void mapsEveryFieldOfAnAppointment() {
+        CatedraAppointmentResponse response = new CatedraAppointmentResponse(8251L, "process-a92b47d0", "user-42",
+                15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), AppointmentStatus.PHONE_PENDING);
+
+        Appointment appointment = catedraRestMapper.toDomainModel(response);
+
+        assertThat(appointment).isEqualTo(new Appointment(8251L, "process-a92b47d0", "user-42",
+                15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), AppointmentStatus.PHONE_PENDING));
     }
 }
