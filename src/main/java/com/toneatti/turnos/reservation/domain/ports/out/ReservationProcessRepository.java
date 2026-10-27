@@ -10,6 +10,7 @@ public interface ReservationProcessRepository {
 
     ReservationProcess create(ReservationProcess process);
     Optional<ReservationProcess> update(Long id, ReservationProcess process);
+    Optional<ReservationProcess> findByIdAndUserExternalId(Long id, String userExternalId);
     Optional<ReservationProcess> findActiveByUserAndSlot(String userExternalId, Long professionalId,
                                                          LocalDate date, LocalTime startTime);
 

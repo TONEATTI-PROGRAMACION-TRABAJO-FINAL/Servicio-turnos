@@ -25,6 +25,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -81,6 +83,19 @@ public class ReservationController {
         } catch (UnexpectedCatedraRejectionException e) {
             log.error("Catedra rejected a reservation request it should have accepted", e);
             throw problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error");
+        }
+    }
+
+    // Another user's process answers 404 as well, so its existence is not revealed. Spring answers 400 when the id
+    // is not a number.
+    @GetMapping("/{id}")
+    public ResponseEntity<ReservationResponse> getReservationById(@AuthenticationPrincipal Jwt jwt,
+                                                                  @PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(reservationDtoMapper.toResponse(
+                    reservationService.getReservationById(jwt.getSubject(), id)));
+        } catch (ReservationException e) {
+            throw problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
         }
     }
 

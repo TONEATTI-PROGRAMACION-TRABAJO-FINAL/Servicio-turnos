@@ -62,6 +62,16 @@ class JpaReservationProcessRepositoryAdapterIntegrationTest {
     }
 
     @Test
+    void findsAProcessByIdOnlyForItsOwner() {
+        ReservationProcess created = adapter.create(started("user-42"));
+
+        assertThat(adapter.findByIdAndUserExternalId(created.getId(), "user-42"))
+                .hasValueSatisfying(found -> assertThat(found.getUserExternalId()).isEqualTo("user-42"));
+        assertThat(adapter.findByIdAndUserExternalId(created.getId(), "user-43")).isEmpty();
+        assertThat(adapter.findByIdAndUserExternalId(created.getId() + 1, "user-42")).isEmpty();
+    }
+
+    @Test
     void rejectsASecondActiveProcessOfTheUserForTheSameSlot() {
         adapter.create(started("user-42"));
 

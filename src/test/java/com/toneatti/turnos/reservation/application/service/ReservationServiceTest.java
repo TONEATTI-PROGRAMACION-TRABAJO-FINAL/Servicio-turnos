@@ -3,6 +3,7 @@ package com.toneatti.turnos.reservation.application.service;
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
+import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,9 @@ class ReservationServiceTest {
     @Mock
     private StartReservationUseCase startReservationUseCase;
 
+    @Mock
+    private GetReservationByIdUseCase getReservationByIdUseCase;
+
     @InjectMocks
     private ReservationService reservationService;
 
@@ -48,5 +52,22 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.startReservation("missing", 15L, DAY, NINE_THIRTY))
                 .isInstanceOf(ReservationException.class)
                 .hasMessageContaining("missing");
+    }
+
+    @Test
+    void getReservationByIdReturnsTheProcessOfTheUseCase() {
+        ReservationProcess process = ReservationProcess.start("user-42", 15L, DAY, NINE_THIRTY, Instant.now());
+        when(getReservationByIdUseCase.getReservationById("user-42", 7L)).thenReturn(Optional.of(process));
+
+        assertThat(reservationService.getReservationById("user-42", 7L)).isSameAs(process);
+    }
+
+    @Test
+    void getReservationByIdThrowsReservationExceptionWhenItIsNotFound() {
+        when(getReservationByIdUseCase.getReservationById("user-42", 99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.getReservationById("user-42", 99L))
+                .isInstanceOf(ReservationException.class)
+                .hasMessageContaining("99");
     }
 }

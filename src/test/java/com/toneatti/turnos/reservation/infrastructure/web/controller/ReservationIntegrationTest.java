@@ -25,6 +25,8 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import static com.toneatti.turnos.support.ProblemAssertions.expectProblem;
@@ -32,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -360,6 +363,59 @@ class ReservationIntegrationTest {
     void answers401WithoutAUserToken() throws Exception {
         mockMvc.perform(post("/reservations").contentType(MediaType.APPLICATION_JSON).content(SLOT))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsAReservationOfTheUserAsItWasStarted() throws Exception {
+        givenTheCatedraHoldsAndConfirms();
+        String started = startReservation(SLOT).andReturn().getResponse().getContentAsString();
+        Long id = jpaReservationProcessRepository.findAll().getFirst().getId();
+
+        getReservation(id, userExternalId)
+                .andExpect(status().isOk())
+                .andExpect(content().json(started));
+    }
+
+    @Test
+    void answers404ForAReservationOfAnotherUser() throws Exception {
+        givenTheCatedraHoldsAndConfirms();
+        startReservation(SLOT).andExpect(status().isCreated());
+        Long id = jpaReservationProcessRepository.findAll().getFirst().getId();
+
+        expectProblem(getReservation(id, UUID.randomUUID().toString()), 404, "RESERVATION_NOT_FOUND");
+    }
+
+    @Test
+    void answers404ForAReservationThatDoesNotExist() throws Exception {
+        expectProblem(getReservation(999_999L, userExternalId), 404, "RESERVATION_NOT_FOUND");
+    }
+
+    // The hold of a reservation whose confirmation got no answer is gone once its deadline passed.
+    @Test
+    void showsAsExpiredAReservationWhoseHoldExpired() throws Exception {
+        Instant past = Instant.parse("2000-01-01T10:00:00Z");
+        Long id = jpaReservationProcessRepository.save(ReservationProcessEntity.builder()
+                .userExternalId(userExternalId).professionalId(15L)
+                .date(LocalDate.of(2099, 9, 14)).startTime(LocalTime.of(9, 30))
+                .status(ReservationStatus.CONFIRMING).holdId("hold-old").reservationProcessId("process-old")
+                .expiresAt(past).active(true).createdAt(past).updatedAt(past)
+                .build()).getId();
+
+        getReservation(id, userExternalId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EXPIRED"));
+        assertTheProcessIs(ReservationStatus.EXPIRED);
+        assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isZero();
+    }
+
+    @Test
+    void answers401ToGetAReservationWithoutAUserToken() throws Exception {
+        mockMvc.perform(get("/reservations/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions getReservation(Long id, String subject) throws Exception {
+        return mockMvc.perform(get("/reservations/" + id).with(jwt().jwt(token -> token.subject(subject))));
     }
 
     private void givenTheCatedraHoldsAndConfirms() {

@@ -448,6 +448,11 @@ class StartReservationUseCaseImplTest {
         }
 
         @Override
+        public Optional<ReservationProcess> findByIdAndUserExternalId(Long id, String userExternalId) {
+            return Optional.ofNullable(byId.get(id));
+        }
+
+        @Override
         public Optional<ReservationProcess> findActiveByUserAndSlot(String userExternalId, Long professionalId,
                                                                     LocalDate date, LocalTime startTime) {
             return byId.values().stream().filter(ReservationProcess::isActive).findFirst();
