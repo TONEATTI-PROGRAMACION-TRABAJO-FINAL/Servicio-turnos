@@ -2,13 +2,11 @@ package com.toneatti.turnos.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.context.properties.bind.validation.BindValidationException;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.core.NestedExceptionUtils;
-import org.springframework.validation.FieldError;
 
 import java.time.Duration;
 
+import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.assertFailsOn;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class UserJwtPropertiesTest {
@@ -42,12 +40,12 @@ class UserJwtPropertiesTest {
 
     @Test
     void failsWhenTheSecretIsMissing() {
-        assertFailsOn("secret", "user.jwt.secret=");
+        assertFailsOn(contextRunner, "secret", "user.jwt.secret=");
     }
 
     @Test
     void failsWhenTheSecretIsShorterThan32Bytes() {
-        assertFailsOn("secretLongEnough", "user.jwt.secret=" + "a".repeat(31));
+        assertFailsOn(contextRunner, "secretLongEnough", "user.jwt.secret=" + "a".repeat(31));
     }
 
     @Test
@@ -58,7 +56,7 @@ class UserJwtPropertiesTest {
 
     @Test
     void failsWhenTheExpirationIsNotPositive() {
-        assertFailsOn("expirationPositive", "user.jwt.expiration=PT0S");
+        assertFailsOn(contextRunner, "expirationPositive", "user.jwt.expiration=PT0S");
     }
 
     @Test
@@ -68,17 +66,6 @@ class UserJwtPropertiesTest {
 
             assertThat(text).doesNotContain(SECRET);
             assertThat(text).contains("PT24H");
-        });
-    }
-
-    private void assertFailsOn(String field, String override) {
-        contextRunner.withPropertyValues(override).run(context -> {
-            assertThat(context).hasFailed();
-            Throwable rootCause = NestedExceptionUtils.getRootCause(context.getStartupFailure());
-            assertThat(rootCause).isInstanceOf(BindValidationException.class);
-            assertThat(((BindValidationException) rootCause).getValidationErrors().getAllErrors())
-                    .extracting(error -> ((FieldError) error).getField())
-                    .containsExactly(field);
         });
     }
 }
