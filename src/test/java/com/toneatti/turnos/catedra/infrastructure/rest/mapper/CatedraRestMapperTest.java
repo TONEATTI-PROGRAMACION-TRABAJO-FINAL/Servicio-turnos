@@ -1,7 +1,9 @@
 package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
+import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupancyResponse;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +19,8 @@ class CatedraRestMapperTest {
 
     @Test
     void returnsNullForNullInput() {
-        assertThat(catedraRestMapper.toDomainModel(null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraOccupancyResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraHoldResponse) null)).isNull();
     }
 
     @Test
@@ -28,5 +31,15 @@ class CatedraRestMapperTest {
         Occupancy occupancy = catedraRestMapper.toDomainModel(response);
 
         assertThat(occupancy).usingRecursiveComparison().isEqualTo(response);
+    }
+
+    @Test
+    void mapsEveryFieldOfAHold() {
+        CatedraHoldResponse response = new CatedraHoldResponse("hold-6c0c2f41", "process-a92b47d0",
+                Instant.parse("2026-09-10T14:44:50Z"));
+
+        Hold hold = catedraRestMapper.toDomainModel(response);
+
+        assertThat(hold).usingRecursiveComparison().isEqualTo(response);
     }
 }

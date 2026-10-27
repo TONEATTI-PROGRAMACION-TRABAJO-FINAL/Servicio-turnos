@@ -2,9 +2,11 @@ package com.toneatti.turnos.catedra.domain.ports.out;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -19,5 +21,11 @@ public interface CatedraRepository {
      * empty when every slot is free.
      */
     List<Occupancy> findOccupancies(Long professionalId, LocalDate from, LocalDate to);
+
+    /**
+     * Holds the slot of the professional for the patient. A {@link CatedraUnavailableException} does not prove that
+     * the hold was not created (section 18.4).
+     */
+    Hold createHold(Long professionalId, LocalDate date, LocalTime startTime, String externalPatientId);
 
 }
