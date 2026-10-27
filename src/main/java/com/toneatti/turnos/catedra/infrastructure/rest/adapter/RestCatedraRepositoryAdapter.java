@@ -3,8 +3,11 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationRequest;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldRequest;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupanciesResponse;
@@ -22,6 +25,7 @@ import org.springframework.web.client.RestClientException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -34,6 +38,7 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
 
     private static final String OCCUPANCIES_PATH = "/api/appointment-occupancies";
     private static final String HOLDS_PATH = "/api/appointment-holds";
+    private static final String CONFIRM_HOLD_PATH = HOLDS_PATH + "/{holdId}/confirm";
 
     private final RestClient catedraRestClient;
     private final CatedraRestMapper catedraRestMapper;
@@ -65,19 +70,38 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
 
     @Override
     public Hold createHold(Long professionalId, LocalDate date, LocalTime startTime, String externalPatientId) {
-        String request = "POST " + HOLDS_PATH;
-        CatedraHoldResponse body = call(request, () ->
-                catedraRestClient.post()
-                        .uri(HOLDS_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(new CatedraHoldRequest(professionalId, date, startTime, externalPatientId))
-                        .retrieve()
-                        .body(CatedraHoldResponse.class));
-        // A 201 without the hold cannot be used, and the hold may exist: the caller has to reconcile as after a timeout.
-        if (body == null || body.holdId() == null || body.reservationProcessId() == null) {
-            throw new CatedraUnavailableException("Catedra answered " + request + " without a hold", null);
-        }
+        CatedraHoldResponse body = post(HOLDS_PATH,
+                new CatedraHoldRequest(professionalId, date, startTime, externalPatientId),
+                CatedraHoldResponse.class, hold -> hold.holdId() != null && hold.reservationProcessId() != null);
         return catedraRestMapper.toDomainModel(body);
+    }
+
+    @Override
+    public HoldConfirmation confirmHold(String holdId, String externalPatientId,
+                                        String patientFirstName, String patientLastName) {
+        CatedraHoldConfirmationResponse body = post(CONFIRM_HOLD_PATH,
+                new CatedraHoldConfirmationRequest(externalPatientId, patientFirstName, patientLastName),
+                CatedraHoldConfirmationResponse.class, confirmation -> confirmation.reservationProcessId() != null,
+                holdId);
+        return catedraRestMapper.toDomainModel(body);
+    }
+
+    // A POST has effects in the cátedra. A success without a usable body cannot be used, and the effect may have
+    // happened, so it fails as unavailable: the caller has to reconcile as after a timeout.
+    private <T> T post(String path, Object requestBody, Class<T> responseType, Predicate<T> complete,
+                       Object... uriVariables) {
+        String request = "POST " + path;
+        T body = call(request, () ->
+                catedraRestClient.post()
+                        .uri(path, uriVariables)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestBody)
+                        .retrieve()
+                        .body(responseType));
+        if (body == null || !complete.test(body)) {
+            throw new CatedraUnavailableException("Catedra answered " + request + " without a usable body", null);
+        }
+        return body;
     }
 
     // A 4xx with a functional code is a rejection the caller can act on; everything else means the cátedra

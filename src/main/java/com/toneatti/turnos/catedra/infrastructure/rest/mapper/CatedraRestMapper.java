@@ -1,6 +1,8 @@
 package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
 import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupancyResponse;
@@ -26,6 +28,15 @@ public class CatedraRestMapper {
         }
         return new Hold(
                 response.holdId(),
+                response.reservationProcessId(),
+                response.expiresAt());
+    }
+
+    public HoldConfirmation toDomainModel(CatedraHoldConfirmationResponse response) {
+        if (response == null) {
+            return null;
+        }
+        return new HoldConfirmation(
                 response.reservationProcessId(),
                 response.expiresAt());
     }

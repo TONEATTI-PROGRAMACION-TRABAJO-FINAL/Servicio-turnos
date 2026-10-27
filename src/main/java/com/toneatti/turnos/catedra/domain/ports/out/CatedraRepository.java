@@ -3,6 +3,7 @@ package com.toneatti.turnos.catedra.domain.ports.out;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 
 import java.time.LocalDate;
@@ -27,5 +28,12 @@ public interface CatedraRepository {
      * the hold was not created (section 18.4).
      */
     Hold createHold(Long professionalId, LocalDate date, LocalTime startTime, String externalPatientId);
+
+    /**
+     * Confirms the hold for the same patient that created it. A {@link CatedraUnavailableException} does not prove
+     * that the hold was not confirmed (section 18.4).
+     */
+    HoldConfirmation confirmHold(String holdId, String externalPatientId,
+                                 String patientFirstName, String patientLastName);
 
 }

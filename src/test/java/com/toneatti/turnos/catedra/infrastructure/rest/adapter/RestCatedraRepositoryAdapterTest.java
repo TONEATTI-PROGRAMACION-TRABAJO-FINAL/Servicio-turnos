@@ -3,6 +3,7 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Hold;
+import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.infrastructure.rest.config.CatedraRestClientConfig;
@@ -35,6 +36,8 @@ class RestCatedraRepositoryAdapterTest {
     private static final String JWT = "test-technical-jwt";
     private static final String OCCUPANCIES_PATH = "/api/appointment-occupancies";
     private static final String HOLDS_PATH = "/api/appointment-holds";
+    private static final String HOLD_ID = "hold-6c0c2f41";
+    private static final String CONFIRM_PATH = HOLDS_PATH + "/" + HOLD_ID + "/confirm";
     private static final LocalDate DAY = LocalDate.of(2026, 9, 14);
     private static final LocalTime NINE_THIRTY = LocalTime.of(9, 30);
     private static final String PATIENT = "user-42";
@@ -264,14 +267,9 @@ class RestCatedraRepositoryAdapterTest {
             "409, SLOT_ALREADY_HELD"
     })
     void failsAsRejectedWithEachCodeOfCreatingAHold(int status, String code) {
-        catedra.respond(HOLDS_PATH, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
+        respondProblem(HOLDS_PATH, status, code);
 
-        assertThatCreatingAHoldFails()
-                .isInstanceOfSatisfying(CatedraRequestRejectedException.class, e -> {
-                    assertThat(e.getStatus()).isEqualTo(status);
-                    assertThat(e.getCode()).isEqualTo(code);
-                })
-                .hasMessageContaining("POST " + HOLDS_PATH);
+        assertRejectedWith(assertThatCreatingAHoldFails(), status, code, "POST " + HOLDS_PATH);
     }
 
     @Test
@@ -289,22 +287,101 @@ class RestCatedraRepositoryAdapterTest {
     void failsAsUnavailableWhenAHoldIsCreatedWithoutABody() {
         catedra.respond(HOLDS_PATH, 201, "");
 
-        assertThatCreatingAHoldFails()
-                .isInstanceOf(CatedraUnavailableException.class)
-                .hasMessageContaining("without a hold");
+        assertUnusableBody(assertThatCreatingAHoldFails());
     }
 
     @Test
     void failsAsUnavailableWhenAHoldIsCreatedWithoutItsIds() {
         catedra.respond(HOLDS_PATH, 201, "{\"status\":\"HELD\",\"expiresAt\":\"2026-09-10T14:44:50Z\"}");
 
-        assertThatCreatingAHoldFails()
+        assertUnusableBody(assertThatCreatingAHoldFails());
+    }
+
+    @Test
+    void confirmsAHold() {
+        catedra.respond(CONFIRM_PATH, 202, """
+                {"reservationProcessId":"process-a92b47d0","status":"WAITING_FOR_PHONE",
+                 "expiresAt":"2026-09-10T14:44:50Z"}
+                """);
+
+        assertThat(adapter.confirmHold(HOLD_ID, PATIENT, "Juan", "Perez")).isEqualTo(
+                new HoldConfirmation("process-a92b47d0", Instant.parse("2026-09-10T14:44:50Z")));
+        assertThat(catedra.lastRequestUri().getPath()).isEqualTo(CONFIRM_PATH);
+        assertThat(catedra.lastRequestBody()).isEqualTo("""
+                {"externalPatientId":"user-42","patientFirstName":"Juan","patientLastName":"Perez"}""");
+        assertThat(catedra.lastRequestHeader(HttpHeaders.CONTENT_TYPE)).isEqualTo("application/json");
+    }
+
+    // Every code of section 13.1 that confirming a hold can answer.
+    @ParameterizedTest
+    @CsvSource({
+            "400, VALIDATION_ERROR",
+            "403, STUDENT_INTEGRATION_NOT_FOUND",
+            "404, PROFESSIONAL_NOT_FOUND",
+            "400, INVALID_SLOT",
+            "409, SLOT_ALREADY_RESERVED",
+            "404, HOLD_NOT_FOUND",
+            "404, HOLD_EXPIRED",
+            "403, HOLD_OWNER_MISMATCH",
+            "400, EXTERNAL_PATIENT_MISMATCH",
+            "409, RESERVATION_PROCESS_ALREADY_CONFIRMED"
+    })
+    void failsAsRejectedWithEachCodeOfConfirmingAHold(int status, String code) {
+        respondProblem(CONFIRM_PATH, status, code);
+
+        assertRejectedWith(assertThatConfirmingAHoldFails(), status, code,
+                "POST " + HOLDS_PATH + "/{holdId}/confirm");
+    }
+
+    @Test
+    void failsAsUnavailableWhenConfirmingAHoldTakesLongerThanTheReadTimeout() {
+        catedra.respondAfter(CONFIRM_PATH, READ_TIMEOUT.multipliedBy(4), 202, "{\"reservationProcessId\":\"late\"}");
+
+        assertThatConfirmingAHoldFails()
                 .isInstanceOf(CatedraUnavailableException.class)
-                .hasMessageContaining("without a hold");
+                .hasCauseInstanceOf(ResourceAccessException.class);
+        // The request reached the cátedra: the hold may be confirmed even though the call failed.
+        assertThat(catedra.requestCount(CONFIRM_PATH)).isEqualTo(1);
+    }
+
+    @Test
+    void failsAsUnavailableWhenAHoldIsConfirmedWithoutABody() {
+        catedra.respond(CONFIRM_PATH, 202, "");
+
+        assertUnusableBody(assertThatConfirmingAHoldFails());
+    }
+
+    @Test
+    void failsAsUnavailableWhenAHoldIsConfirmedWithoutTheProcess() {
+        catedra.respond(CONFIRM_PATH, 202, "{\"status\":\"WAITING_FOR_PHONE\"}");
+
+        assertUnusableBody(assertThatConfirmingAHoldFails());
+    }
+
+    private void respondProblem(String path, int status, String code) {
+        catedra.respond(path, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
+    }
+
+    private static void assertRejectedWith(AbstractThrowableAssert<?, ? extends Throwable> failure,
+                                           int status, String code, String request) {
+        failure.isInstanceOfSatisfying(CatedraRequestRejectedException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(status);
+                    assertThat(e.getCode()).isEqualTo(code);
+                })
+                .hasMessageContaining(request);
+    }
+
+    private static void assertUnusableBody(AbstractThrowableAssert<?, ? extends Throwable> failure) {
+        failure.isInstanceOf(CatedraUnavailableException.class)
+                .hasMessageContaining("without a usable body");
     }
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatCreatingAHoldFails() {
         return assertThatThrownBy(() -> adapter.createHold(15L, DAY, NINE_THIRTY, PATIENT));
+    }
+
+    private AbstractThrowableAssert<?, ? extends Throwable> assertThatConfirmingAHoldFails() {
+        return assertThatThrownBy(() -> adapter.confirmHold(HOLD_ID, PATIENT, "Juan", "Perez"));
     }
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheOccupanciesOfADayFails() {

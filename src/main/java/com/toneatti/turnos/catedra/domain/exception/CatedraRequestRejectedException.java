@@ -12,6 +12,9 @@ public class CatedraRequestRejectedException extends RuntimeException {
     public static final String INVALID_SLOT = "INVALID_SLOT";
     public static final String SLOT_ALREADY_RESERVED = "SLOT_ALREADY_RESERVED";
     public static final String SLOT_ALREADY_HELD = "SLOT_ALREADY_HELD";
+    public static final String HOLD_NOT_FOUND = "HOLD_NOT_FOUND";
+    public static final String HOLD_EXPIRED = "HOLD_EXPIRED";
+    public static final String RESERVATION_PROCESS_ALREADY_CONFIRMED = "RESERVATION_PROCESS_ALREADY_CONFIRMED";
 
     private final int status;
     private final String code;
