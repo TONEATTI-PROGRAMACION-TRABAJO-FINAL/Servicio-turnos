@@ -2,6 +2,8 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
@@ -38,6 +40,7 @@ class RestCatedraRepositoryAdapterTest {
     private static final String HOLDS_PATH = "/api/appointment-holds";
     private static final String HOLD_ID = "hold-6c0c2f41";
     private static final String CONFIRM_PATH = HOLDS_PATH + "/" + HOLD_ID + "/confirm";
+    private static final String APPOINTMENTS_PATH = "/api/appointments";
     private static final LocalDate DAY = LocalDate.of(2026, 9, 14);
     private static final LocalTime NINE_THIRTY = LocalTime.of(9, 30);
     private static final String PATIENT = "user-42";
@@ -356,6 +359,71 @@ class RestCatedraRepositoryAdapterTest {
         catedra.respond(CONFIRM_PATH, 202, "{\"status\":\"WAITING_FOR_PHONE\"}");
 
         assertUnusableBody(assertThatConfirmingAHoldFails());
+    }
+
+    @Test
+    void findsTheAppointmentsOfAPatient() {
+        catedra.respond(APPOINTMENTS_PATH, 200, """
+                [{"reservationId":8251,"reservationProcessId":"process-a92b47d0","externalPatientId":"user-42",
+                  "appointmentDate":"2026-09-14","startTime":"09:30:00","endTime":"10:00:00","professionalId":15,
+                  "professionalFirstName":"Ana","professionalLastName":"Gomez","patientFirstName":"Juan",
+                  "patientLastName":"Perez","patientPhone":null,"status":"PHONE_PENDING",
+                  "createdAt":"2026-09-10T14:35:00Z","confirmedAt":null,"cancelledAt":null,"cancellationReason":null}]
+                """);
+
+        assertThat(adapter.findAppointments(PATIENT, DAY, DAY)).containsExactly(new Appointment(8251L,
+                "process-a92b47d0", PATIENT, 15L, DAY, NINE_THIRTY, AppointmentStatus.PHONE_PENDING));
+        assertThat(catedra.lastRequestUri().getQuery())
+                .isEqualTo("externalPatientId=user-42&from=2026-09-14&to=2026-09-14&page=0&size=100");
+    }
+
+    @Test
+    void findsNoAppointmentsWhenTheListIsEmpty() {
+        catedra.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        assertThat(adapter.findAppointments(PATIENT, DAY, DAY)).isEmpty();
+    }
+
+    @Test
+    void findsNoAppointmentsWhenTheBodyIsEmpty() {
+        catedra.respond(APPOINTMENTS_PATH, 200, "");
+
+        assertThat(adapter.findAppointments(PATIENT, DAY, DAY)).isEmpty();
+    }
+
+    // Every code of section 13.1 that listing the reservations can answer.
+    @ParameterizedTest
+    @CsvSource({
+            "403, STUDENT_INTEGRATION_NOT_FOUND",
+            "400, INVALID_DATE_RANGE"
+    })
+    void failsAsRejectedWithEachCodeOfFindingAppointments(int status, String code) {
+        respondProblem(APPOINTMENTS_PATH, status, code);
+
+        assertRejectedWith(assertThatFindingTheAppointmentsOfADayFails(), status, code, "GET " + APPOINTMENTS_PATH);
+    }
+
+    @Test
+    void failsAsUnavailableWhenFindingAppointmentsTakesLongerThanTheReadTimeout() {
+        catedra.respondAfter(APPOINTMENTS_PATH, READ_TIMEOUT.multipliedBy(4), 200, "[]");
+
+        assertThatFindingTheAppointmentsOfADayFails()
+                .isInstanceOf(CatedraUnavailableException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
+    void failsAsUnavailableWhenAnAppointmentStatusIsUnknown() {
+        catedra.respond(APPOINTMENTS_PATH, 200, """
+                [{"reservationProcessId":"process-a92b47d0","appointmentDate":"2026-09-14","status":"ARCHIVED"}]
+                """);
+
+        assertThatFindingTheAppointmentsOfADayFails()
+                .isInstanceOf(CatedraUnavailableException.class);
+    }
+
+    private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheAppointmentsOfADayFails() {
+        return assertThatThrownBy(() -> adapter.findAppointments(PATIENT, DAY, DAY));
     }
 
     private void respondProblem(String path, int status, String code) {

@@ -2,6 +2,7 @@ package com.toneatti.turnos.catedra.domain.ports.out;
 
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
+import com.toneatti.turnos.catedra.domain.model.Appointment;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
@@ -35,5 +36,11 @@ public interface CatedraRepository {
      */
     HoldConfirmation confirmHold(String holdId, String externalPatientId,
                                  String patientFirstName, String patientLastName);
+
+    /**
+     * Reservations of the patient with a date between both dates, inclusive, in any status; empty when there are
+     * none. Used to find out whether a confirmation whose answer was lost reached the cátedra.
+     */
+    List<Appointment> findAppointments(String externalPatientId, LocalDate from, LocalDate to);
 
 }
