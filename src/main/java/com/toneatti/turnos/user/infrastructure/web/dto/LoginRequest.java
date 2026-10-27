@@ -1,8 +1,8 @@
 package com.toneatti.turnos.user.infrastructure.web.dto;
 
-import com.toneatti.turnos.user.infrastructure.web.validation.PasswordWithinBcryptLimit;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 @Getter
@@ -18,6 +18,6 @@ public class LoginRequest {
 
     // No minimum length: that policy applies when registering, not when logging in.
     @NotBlank(message = "Password is mandatory")
-    @PasswordWithinBcryptLimit
+    @Size(max = 128, message = "Password must have at most 128 characters")
     private String password;
 }

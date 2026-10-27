@@ -94,9 +94,8 @@ class UserLoginIntegrationTest {
     }
 
     @Test
-    void rejectsAPasswordLongerThan72BytesInUtf8() throws Exception {
-        // 37 characters, but 74 bytes in UTF-8.
-        mockMvc.perform(login("someone@example.com", "ñ".repeat(37)))
+    void rejectsAPasswordLongerThan128Characters() throws Exception {
+        mockMvc.perform(login("someone@example.com", "ñ".repeat(129)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
