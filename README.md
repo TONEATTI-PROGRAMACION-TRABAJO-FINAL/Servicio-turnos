@@ -21,13 +21,17 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | `CATEDRA_KAFKA_CONSUMER_GROUP_ID` | `catedra.kafka.consumer-group-id` | `integration.kafkaConsumerGroupId` |
 | `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | `catedra.kafka.appointment-actions-topic` | `integration.kafkaAppointmentActionsTopic` |
 | `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` | `catedra.kafka.appointment-phone-topic` | `integration.kafkaAppointmentPhoneTopic` |
+| `CATEDRA_KAFKA_SECURITY_PROTOCOL` | `catedra.kafka.security-protocol` | Opcional. `PLAINTEXT` por defecto: el contrato no entrega credenciales de Kafka |
+| `CATEDRA_KAFKA_AUTO_OFFSET_RESET` | `catedra.kafka.auto-offset-reset` | Opcional. `earliest` (por defecto) o `latest` |
+| `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` | `catedra.kafka.retry-max-elapsed-time` | Opcional. Cuánto se reintenta un evento cuyo procesamiento falla, en ISO-8601; por defecto `PT2M` |
+| `CATEDRA_KAFKA_LISTENER_ENABLED` | `catedra.kafka.listener-enabled` | Opcional. `false` deja el consumidor detenido; por defecto `true` |
 | `CATALOGO_BASE_URL` | `catalogo.base-url` | URL base de Servicio-catalogo |
 | `USER_JWT_SECRET` | `user.jwt.secret` | Secreto propio para firmar los JWT de los usuarios (HS256, mínimo 32 bytes). Se genera, por ejemplo, con `openssl rand -base64 48` |
 | `USER_JWT_EXPIRATION` | `user.jwt.expiration` | Opcional. Vigencia del JWT de usuario en formato ISO-8601; por defecto `PT24H` |
 
 Los campos `integration.*` los devuelven `POST /api/student/register`, `POST /api/authenticate` y `GET /api/student/integration`.
 
-Todas son obligatorias salvo `USER_JWT_EXPIRATION`. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
+Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
 
 ### Pasos
 
@@ -46,7 +50,7 @@ El archivo `.env` contiene secretos (JWT técnico y secreto del JWT de usuario):
 
 ### Tests
 
-Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions.
+Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions. El consumidor Kafka queda detenido en los tests, salvo en su test de integración, que lo prueba contra un broker embebido (`@EmbeddedKafka`): no hace falta Docker ni el entorno de la cátedra.
 
 ## Contraseñas
 
@@ -159,3 +163,15 @@ Un timeout, un `5xx` o una respuesta ilegible no prueban que la operación haya 
 - **Confirmación sin respuesta.** Se buscan las reservas del paciente para ese día (`GET /api/appointments`). Si aparece el `reservationProcessId` del proceso, la confirmación llegó y no se repite. Si no aparece, se confirma una vez más; si la primera llegó entretanto, la cátedra responde `RESERVATION_PROCESS_ALREADY_CONFIRMED` y se toma como éxito.
 
 Los timeouts del cliente REST de la cátedra son `PT2S` de conexión y `PT5S` de lectura por defecto; `CATEDRA_CONNECT_TIMEOUT` y `CATEDRA_READ_TIMEOUT` los cambian (duración ISO-8601).
+
+### Eventos de la cátedra (Kafka)
+
+Después de la confirmación, el proceso avanza con los eventos que la cátedra publica en `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` (secciones 15.4 y 15.6 a 15.10 del contrato): `AdditionalInformationRequested` guarda su `eventId` como `requestEventId` (lo necesita el envío del teléfono), y los demás llevan el proceso a los estados de la tabla de arriba.
+
+- **Al menos una vez.** El offset se confirma recién después de procesar cada mensaje, nunca automáticamente. Cada `eventId` procesado se guarda en `processed_appointment_actions` (con restricción única), en la misma transacción que el cambio del proceso: un mensaje repetido se reconoce y no repite efectos (sección 18.1).
+- **Eventos tardíos.** Un evento que el estado actual no admite (por ejemplo, una confirmación sobre un proceso `EXPIRED`) se registra y se ignora: no reabre un estado final ni hace retroceder una reserva confirmada (sección 18.3).
+- **Proceso desconocido.** Un evento de un `reservationProcessId` que no existe localmente se registra y se ignora.
+- **Mensaje ilegible.** JSON inválido, sin `eventId`, `eventType` o `reservationProcessId`, con un `eventType` desconocido o con un `schemaVersion` distinto de `1`: se deja en el log (`WARN`, con partición y offset) y se saltea, sin reintentar. Los campos desconocidos se ignoran.
+- **Error al procesar.** Si falla aplicar un evento legible (por ejemplo, la base no responde o otro request cambió el proceso), el mensaje se reintenta en el lugar con espera exponencial (1 s, 2 s, 4 s… hasta 30 s entre intentos) durante `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` (2 minutos por defecto). Mientras tanto la partición espera.
+
+**Limitación.** Si el evento sigue fallando al agotar los reintentos, se registra en el log como `ERROR` con su contenido completo y **se saltea**, para no bloquear la partición indefinidamente. Ese evento no se aplica: el contrato no define un topic de errores (DLT) donde dejarlo. El estado persistido en la cátedra se puede reconciliar por REST (`GET /api/appointments`, sección 11); esa reconciliación todavía no está implementada.

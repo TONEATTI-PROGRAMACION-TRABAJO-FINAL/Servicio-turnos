@@ -455,7 +455,8 @@ class RestCatedraRepositoryAdapterTest {
     private static RestCatedraRepositoryAdapter adapterFor(String baseUrl) {
         CatedraIntegrationProperties properties = new CatedraIntegrationProperties(
                 baseUrl, JWT, Duration.ofSeconds(1), READ_TIMEOUT,
-                new CatedraIntegrationProperties.Kafka("localhost:9092", "group", "actions", "phone"));
+                new CatedraIntegrationProperties.Kafka("localhost:9092", "group", "actions", "phone", "PLAINTEXT",
+                        "earliest", Duration.ofMinutes(2), false));
         return new RestCatedraRepositoryAdapter(
                 new CatedraRestClientConfig().catedraRestClient(properties), new CatedraRestMapper());
     }
