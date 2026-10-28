@@ -106,10 +106,10 @@ Los ids de la cátedra (`holdId`, `reservationProcessId`) se guardan pero no se 
 ### Estados
 
 ```
-PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE
-     │            │           │
-     └──▶ FAILED ◀┴───────────┤
-                  └──▶ EXPIRED ◀┘
+PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE ──▶ CONFIRMED ──▶ CANCELLED
+     │            │           │                 │
+     └──▶ FAILED ◀┴───────────┴─────────────────┤
+                  └──▶ EXPIRED ◀┴───────────────┘
 ```
 
 | Estado | Significado |
@@ -117,11 +117,13 @@ PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE
 | `PENDING_HOLD` | Se pidió el hold y todavía no se sabe si existe |
 | `HELD` | La cátedra creó el hold |
 | `CONFIRMING` | Se pidió la confirmación y todavía no se sabe si llegó |
-| `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt` |
-| `FAILED` | La cátedra rechazó el hold o la confirmación (se guarda su `code`) |
-| `EXPIRED` | El hold venció antes de confirmarse |
+| `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt`. Un teléfono rechazado no cambia el estado: se puede enviar otro hasta `expiresAt` |
+| `CONFIRMED` | La cátedra confirmó la reserva (`AppointmentConfirmed`) |
+| `CANCELLED` | La reserva confirmada se canceló (`AppointmentCancelled`) |
+| `FAILED` | La cátedra rechazó el hold o la confirmación, o informó el proceso como inválido (`AppointmentProcessInvalid`); se guarda su `code` o `reason` |
+| `EXPIRED` | El hold o el proceso vencieron (`AppointmentProcessExpired`, con su `reason`) |
 
-`FAILED` y `EXPIRED` son finales: una respuesta tardía no los reabre, y el usuario puede iniciar otra reserva para el mismo slot. Cada estado se guarda **antes** de la llamada a la cátedra que lo deja, así que después de un timeout queda registrado qué pudo haber pasado. La vigencia del hold es la `expiresAt` de la cátedra; si ya pasó, el proceso se marca `EXPIRED` sin volver a llamarla.
+`FAILED`, `EXPIRED` y `CANCELLED` son finales: una respuesta o un evento tardío no los reabre, y el usuario puede iniciar otra reserva para el mismo slot. `CONFIRMED` no es final, porque todavía se puede cancelar, pero ningún evento tardío lo hace volver atrás, vencer ni fallar; iniciar de nuevo la reserva del mismo slot la devuelve tal como está. Cada estado se guarda **antes** de la llamada a la cátedra que lo deja, así que después de un timeout queda registrado qué pudo haber pasado. La vigencia del hold es la `expiresAt` de la cátedra; si ya pasó, el proceso se marca `EXPIRED` sin volver a llamarla.
 
 Un usuario tiene como máximo un proceso activo por slot (profesional, fecha y hora). Lo garantiza una restricción única en `reservation_processes` sobre `(user_external_id, professional_id, slot_date, start_time, active)`, donde `active` vale `TRUE` mientras el proceso no es final y `NULL` después: la restricción trata los `NULL` como distintos, así que admite cualquier cantidad de procesos terminados y uno solo activo.
 

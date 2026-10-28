@@ -89,14 +89,16 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
     }
 
     // A double tap or a retry of the app continues the process of the slot instead of holding it twice. The last
-    // call of PENDING_HOLD and CONFIRMING got no answer, so they are reconciled before calling again.
+    // call of PENDING_HOLD and CONFIRMING got no answer, so they are reconciled before calling again. A confirmed
+    // reservation of the slot is already the user's.
     private ReservationProcess resume(ReservationProcess process, User user) {
         return switch (process.getStatus()) {
-            case WAITING_FOR_PHONE -> process;
+            case WAITING_FOR_PHONE, CONFIRMED -> process;
             case PENDING_HOLD -> confirm(hold(process, true), user, false);
             case HELD -> confirm(process, user, false);
             case CONFIRMING -> confirm(process, user, true);
-            case EXPIRED, FAILED -> throw new IllegalStateException("Process " + process.getId() + " is not active");
+            case CANCELLED, EXPIRED, FAILED ->
+                    throw new IllegalStateException("Process " + process.getId() + " is not active");
         };
     }
 

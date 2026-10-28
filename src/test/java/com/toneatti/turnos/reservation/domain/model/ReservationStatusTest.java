@@ -20,7 +20,11 @@ class ReservationStatusTest {
             "HELD, FAILED",
             "CONFIRMING, WAITING_FOR_PHONE",
             "CONFIRMING, EXPIRED",
-            "CONFIRMING, FAILED"
+            "CONFIRMING, FAILED",
+            "WAITING_FOR_PHONE, CONFIRMED",
+            "WAITING_FOR_PHONE, EXPIRED",
+            "WAITING_FOR_PHONE, FAILED",
+            "CONFIRMED, CANCELLED"
     })
     void allowsTheTransitionsOfTheStateMachine(ReservationStatus from, ReservationStatus to) {
         assertThat(from.canTransitionTo(to)).isTrue();
@@ -32,7 +36,7 @@ class ReservationStatusTest {
                 .mapToLong(from -> Arrays.stream(ReservationStatus.values()).filter(from::canTransitionTo).count())
                 .sum();
 
-        assertThat(allowed).isEqualTo(8);
+        assertThat(allowed).isEqualTo(12);
     }
 
     @Test
@@ -40,15 +44,23 @@ class ReservationStatusTest {
         assertThat(ReservationStatus.PENDING_HOLD.canTransitionTo(ReservationStatus.EXPIRED)).isFalse();
     }
 
+    // A confirmed reservation can only be cancelled: it does not go back to waiting, expire or fail.
+    @Test
+    void aConfirmedReservationCanOnlyBeCancelled() {
+        assertThat(ReservationStatus.values()).filteredOn(ReservationStatus.CONFIRMED::canTransitionTo)
+                .containsExactly(ReservationStatus.CANCELLED);
+    }
+
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"EXPIRED", "FAILED"})
+    @EnumSource(value = ReservationStatus.class, names = {"CANCELLED", "EXPIRED", "FAILED"})
     void finalStatusesCannotBeReopened(ReservationStatus status) {
         assertThat(status.isFinal()).isTrue();
         assertThat(ReservationStatus.values()).noneMatch(status::canTransitionTo);
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"EXPIRED", "FAILED"}, mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = ReservationStatus.class, names = {"CANCELLED", "EXPIRED", "FAILED"},
+            mode = EnumSource.Mode.EXCLUDE)
     void theOtherStatusesAreNotFinal(ReservationStatus status) {
         assertThat(status.isFinal()).isFalse();
     }

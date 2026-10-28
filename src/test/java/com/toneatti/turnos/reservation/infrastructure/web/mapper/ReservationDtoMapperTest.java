@@ -24,8 +24,8 @@ class ReservationDtoMapperTest {
     void mapsTheProcessWithoutTheIdsOfTheCatedra() {
         ReservationProcess process = new ReservationProcess(7L, "user-42", 15L, LocalDate.of(2099, 9, 14),
                 LocalTime.of(9, 30), ReservationStatus.WAITING_FOR_PHONE, "hold-6c0c2f41", "process-a92b47d0",
-                Instant.parse("2099-09-10T14:44:50Z"), null, Instant.parse("2099-09-10T14:30:00Z"),
-                Instant.parse("2099-09-10T14:30:05Z"), 3L);
+                Instant.parse("2099-09-10T14:44:50Z"), null, null, null, null, null,
+                Instant.parse("2099-09-10T14:30:00Z"), Instant.parse("2099-09-10T14:30:05Z"), 3L);
 
         ReservationResponse response = reservationDtoMapper.toResponse(process);
 

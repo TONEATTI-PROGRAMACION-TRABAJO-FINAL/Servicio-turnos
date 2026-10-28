@@ -34,14 +34,15 @@ class ReservationProcessMapperTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"EXPIRED", "FAILED"}, mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = ReservationStatus.class, names = {"CANCELLED", "EXPIRED", "FAILED"},
+            mode = EnumSource.Mode.EXCLUDE)
     void marksAnActiveProcessAsActive(ReservationStatus status) {
         assertThat(reservationProcessMapper.toEntity(processIn(status)).getActive()).isTrue();
     }
 
     // NULL, never FALSE: see the unique constraint of ReservationProcessEntity.
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"EXPIRED", "FAILED"})
+    @EnumSource(value = ReservationStatus.class, names = {"CANCELLED", "EXPIRED", "FAILED"})
     void leavesAFinishedProcessWithoutActive(ReservationStatus status) {
         assertThat(reservationProcessMapper.toEntity(processIn(status)).getActive()).isNull();
     }
@@ -49,6 +50,7 @@ class ReservationProcessMapperTest {
     private static ReservationProcess processIn(ReservationStatus status) {
         return new ReservationProcess(7L, "user-42", 15L, LocalDate.of(2099, 9, 14), LocalTime.of(9, 30), status,
                 "hold-6c0c2f41", "process-a92b47d0", Instant.parse("2099-09-10T14:44:50Z"), "SLOT_ALREADY_HELD",
+                "request-event-8a31", 8251L, "INVALID_PHONE_NUMBER", "Cambio solicitado por el usuario",
                 Instant.parse("2099-09-10T14:30:00Z"), Instant.parse("2099-09-10T14:30:05Z"), 3L);
     }
 }

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -295,10 +296,11 @@ class StartReservationUseCaseImplTest {
                 .confirmHold(anyString(), anyString(), anyString(), anyString());
     }
 
-    @Test
-    void returnsTheActiveProcessOfTheSlotWhenItAlreadyWaitsForThePhone() {
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "CONFIRMED"})
+    void returnsTheActiveProcessOfTheSlotWhenTheCatedraAlreadyConfirmedTheHold(ReservationStatus status) {
         givenTheUser();
-        ReservationProcess existing = processes.storedIn(WAITING_FOR_PHONE, EXPIRES_AT);
+        ReservationProcess existing = processes.storedIn(status, EXPIRES_AT);
 
         StartedReservation started = start();
 
@@ -475,7 +477,8 @@ class StartReservationUseCaseImplTest {
             boolean held = status != PENDING_HOLD;
             return new ReservationProcess(id, process.getUserExternalId(), process.getProfessionalId(),
                     process.getDate(), process.getStartTime(), status, held ? HOLD_ID : null,
-                    held ? "process-a92b47d0" : null, expiresAt, null, process.getCreatedAt(), NOW, 0L);
+                    held ? "process-a92b47d0" : null, expiresAt, null, null, null, null, null,
+                    process.getCreatedAt(), NOW, 0L);
         }
     }
 }

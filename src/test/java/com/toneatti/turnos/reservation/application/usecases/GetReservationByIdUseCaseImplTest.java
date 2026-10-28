@@ -98,6 +98,6 @@ class GetReservationByIdUseCaseImplTest {
 
     private static ReservationProcess processIn(ReservationStatus status, Instant expiresAt) {
         return new ReservationProcess(7L, USER_ID, 15L, LocalDate.of(2099, 9, 14), LocalTime.of(9, 30), status,
-                "hold-6c0c2f41", "process-a92b47d0", expiresAt, null, NOW, NOW, 0L);
+                "hold-6c0c2f41", "process-a92b47d0", expiresAt, null, null, null, null, null, NOW, NOW, 0L);
     }
 }
