@@ -142,7 +142,7 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 | `404` | `RESERVATION_NOT_FOUND` | `GET` de un proceso inexistente o de otro usuario |
 | `409` | `SLOT_ALREADY_RESERVED` | El slot ya tiene una reserva confirmada |
 | `409` | `SLOT_ALREADY_HELD` | El slot tiene un hold activo de otro proceso |
-| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento |
+| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento. Si lo que cambió el proceso fue un evento de la cátedra que lo dejó en `WAITING_FOR_PHONE` o `CONFIRMED`, no hay conflicto: se devuelve ese proceso |
 | `410` | `HOLD_EXPIRED` | El hold venció antes de confirmarse |
 | `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
 | `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
