@@ -20,17 +20,20 @@ class ReservationDtoMapperTest {
         assertThat(reservationDtoMapper.toResponse(null)).isNull();
     }
 
+    // Neither the ids of the cátedra (holdId, reservationProcessId, requestEventId, its reservationId) are exposed.
     @Test
-    void mapsTheProcessWithoutTheIdsOfTheCatedra() {
+    void mapsTheProcessAndTheOutcomeOfTheCatedraWithoutItsIds() {
         ReservationProcess process = new ReservationProcess(7L, "user-42", 15L, LocalDate.of(2099, 9, 14),
-                LocalTime.of(9, 30), ReservationStatus.WAITING_FOR_PHONE, "hold-6c0c2f41", "process-a92b47d0",
-                Instant.parse("2099-09-10T14:44:50Z"), null, null, null, null, null,
+                LocalTime.of(9, 30), ReservationStatus.CANCELLED, "hold-6c0c2f41", "process-a92b47d0",
+                Instant.parse("2099-09-10T14:44:50Z"), "HOLD_EXPIRED", "request-event-8a31", 8251L,
+                "INVALID_PHONE_NUMBER", "Cambio solicitado por el usuario",
                 Instant.parse("2099-09-10T14:30:00Z"), Instant.parse("2099-09-10T14:30:05Z"), 3L);
 
         ReservationResponse response = reservationDtoMapper.toResponse(process);
 
         assertThat(response).usingRecursiveComparison().isEqualTo(new ReservationResponse(7L, 15L, "2099-09-14",
-                "09:30", "WAITING_FOR_PHONE", "2099-09-10T14:44:50Z", "2099-09-10T14:30:00Z"));
+                "09:30", "CANCELLED", "2099-09-10T14:44:50Z", "HOLD_EXPIRED", "INVALID_PHONE_NUMBER",
+                "Cambio solicitado por el usuario", "2099-09-10T14:30:00Z"));
     }
 
     @Test

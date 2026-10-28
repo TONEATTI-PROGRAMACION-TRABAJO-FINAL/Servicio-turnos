@@ -99,13 +99,24 @@ Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido l
   "startTime": "09:30",
   "status": "WAITING_FOR_PHONE",
   "expiresAt": "2026-09-10T14:44:50Z",
+  "failureCode": null,
+  "phoneRejectionReason": null,
+  "cancellationReason": null,
   "createdAt": "2026-09-10T14:30:00Z"
 }
 ```
 
 `GET /reservations/{id}` devuelve el mismo cuerpo. Solo encuentra los procesos del usuario: el de otro usuario responde `404` como si no existiera. No llama a la cátedra.
 
-Los ids de la cátedra (`holdId`, `reservationProcessId`) se guardan pero no se exponen.
+El resultado del proceso según la cátedra, `null` cuando no corresponde:
+
+| Campo | Cuándo tiene valor |
+| --- | --- |
+| `failureCode` | `FAILED` o `EXPIRED`: el `code` con que la cátedra rechazó el hold o la confirmación, o el `reason` de `AppointmentProcessInvalid` (por ejemplo `REQUEST_EVENT_MISMATCH`) o de `AppointmentProcessExpired` (`HOLD_EXPIRED`) |
+| `phoneRejectionReason` | La cátedra rechazó el último teléfono (`AdditionalInformationRejected`, por ejemplo `INVALID_PHONE_NUMBER`). Mientras el estado siga en `WAITING_FOR_PHONE`, la app puede pedir otro hasta `expiresAt` |
+| `cancellationReason` | `CANCELLED`, si la cancelación tuvo motivo |
+
+Los ids de la cátedra (`holdId`, `reservationProcessId`, el `requestEventId` del pedido de teléfono y el `reservationId` de la reserva confirmada) se guardan pero no se exponen.
 
 ### Estados
 
