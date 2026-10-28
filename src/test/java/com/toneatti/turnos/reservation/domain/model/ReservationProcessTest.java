@@ -1,11 +1,5 @@
 package com.toneatti.turnos.reservation.domain.model;
 
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AdditionalInformationRejected;
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AdditionalInformationRequested;
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AppointmentCancelled;
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AppointmentConfirmed;
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AppointmentProcessExpired;
-import com.toneatti.turnos.reservation.domain.model.AppointmentAction.AppointmentProcessInvalid;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -15,9 +9,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.List;
 import java.util.stream.Stream;
 
+import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.*;
 import static com.toneatti.turnos.reservation.domain.model.ReservationStatus.CANCELLED;
 import static com.toneatti.turnos.reservation.domain.model.ReservationStatus.CONFIRMED;
 import static com.toneatti.turnos.reservation.domain.model.ReservationStatus.CONFIRMING;
@@ -34,23 +28,6 @@ class ReservationProcessTest {
     private static final Instant NOW = Instant.parse("2099-09-10T14:30:00Z");
     private static final Instant EXPIRES_AT = Instant.parse("2099-09-10T14:44:50Z");
     private static final Instant LATER = NOW.plusSeconds(30);
-    private static final String PROCESS_ID = "process-a92b47d0";
-
-    // The events of sections 15.4 and 15.6 to 15.10 of the integration contract.
-    private static final AdditionalInformationRequested REQUESTED = new AdditionalInformationRequested(
-            "request-event-8a31", PROCESS_ID, EXPIRES_AT.plusSeconds(60));
-    private static final AppointmentConfirmed CONFIRMATION = new AppointmentConfirmed(
-            "confirmation-event-7d10", PROCESS_ID, 8251L);
-    private static final AdditionalInformationRejected REJECTION = new AdditionalInformationRejected(
-            "rejection-event-7d11", PROCESS_ID, "INVALID_PHONE_NUMBER", EXPIRES_AT.plusSeconds(120));
-    private static final AppointmentProcessExpired EXPIRATION = new AppointmentProcessExpired(
-            "process-event-7d12", PROCESS_ID, "HOLD_EXPIRED");
-    private static final AppointmentProcessInvalid INVALIDATION = new AppointmentProcessInvalid(
-            "process-event-7d13", PROCESS_ID, "REQUEST_EVENT_MISMATCH");
-    private static final AppointmentCancelled CANCELLATION = new AppointmentCancelled(
-            "cancellation-event-7d14", PROCESS_ID, "Cambio solicitado por el usuario");
-    private static final List<AppointmentAction> ALL_EVENTS = List.of(REQUESTED, CONFIRMATION, REJECTION, EXPIRATION,
-            INVALIDATION, CANCELLATION);
 
     @Test
     void startsPendingTheHoldForItsOwner() {
@@ -88,7 +65,7 @@ class ReservationProcessTest {
         process.markWaitingForPhone(EXPIRES_AT.plusSeconds(60), NOW.plusSeconds(3));
 
         assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
-        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT.plusSeconds(60));
+        assertThat(process.getExpiresAt()).isEqualTo(REQUESTED.expiresAt());
         assertThat(process.isActive()).isTrue();
     }
 
@@ -166,7 +143,7 @@ class ReservationProcessTest {
 
         assertThat(process.getStatus()).isEqualTo(WAITING_FOR_PHONE);
         assertThat(process.getRequestEventId()).isEqualTo("request-event-8a31");
-        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT.plusSeconds(60));
+        assertThat(process.getExpiresAt()).isEqualTo(REQUESTED.expiresAt());
         assertThat(process.getUpdatedAt()).isEqualTo(LATER);
     }
 
@@ -201,7 +178,7 @@ class ReservationProcessTest {
 
         assertThat(process.getStatus()).isEqualTo(WAITING_FOR_PHONE);
         assertThat(process.getPhoneRejectionReason()).isEqualTo("INVALID_PHONE_NUMBER");
-        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT.plusSeconds(120));
+        assertThat(process.getExpiresAt()).isEqualTo(REJECTION.expiresAt());
         assertThat(process.getUpdatedAt()).isEqualTo(LATER);
     }
 
@@ -254,8 +231,8 @@ class ReservationProcessTest {
 
     static Stream<Arguments> eventsTheStatusDoesNotAccept() {
         Stream<Arguments> late = Stream.of(CANCELLED, EXPIRED, FAILED)
-                .flatMap(status -> ALL_EVENTS.stream().map(action -> Arguments.of(status, action)));
-        Stream<Arguments> afterConfirmed = ALL_EVENTS.stream()
+                .flatMap(status -> ALL.stream().map(action -> Arguments.of(status, action)));
+        Stream<Arguments> afterConfirmed = ALL.stream()
                 .filter(action -> action != CANCELLATION)
                 .map(action -> Arguments.of(CONFIRMED, action));
         Stream<Arguments> early = Stream.of(
