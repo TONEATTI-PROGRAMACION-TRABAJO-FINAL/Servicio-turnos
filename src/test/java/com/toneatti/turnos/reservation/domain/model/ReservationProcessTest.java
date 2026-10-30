@@ -182,6 +182,28 @@ class ReservationProcessTest {
         assertThat(process.getUpdatedAt()).isEqualTo(LATER);
     }
 
+    @Test
+    void forgetsTheRejectionOfThePreviousPhoneWhenAnotherIsSubmitted() {
+        ReservationProcess process = processIn(WAITING_FOR_PHONE);
+        process.apply(REJECTION, NOW);
+
+        process.submitPhone(LATER);
+
+        assertThat(process.getStatus()).isEqualTo(WAITING_FOR_PHONE);
+        assertThat(process.getPhoneRejectionReason()).isNull();
+        assertThat(process.getExpiresAt()).isEqualTo(REJECTION.expiresAt());
+        assertThat(process.getUpdatedAt()).isEqualTo(LATER);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = "WAITING_FOR_PHONE", mode = EnumSource.Mode.EXCLUDE)
+    void acceptsAPhoneOnlyWhileWaitingForIt(ReservationStatus status) {
+        ReservationProcess process = processIn(status);
+
+        assertThatThrownBy(() -> process.submitPhone(LATER)).isInstanceOf(IllegalStateException.class);
+        assertThat(process).usingRecursiveComparison().isEqualTo(processIn(status));
+    }
+
     @ParameterizedTest
     @EnumSource(value = ReservationStatus.class, names = {"HELD", "CONFIRMING", "WAITING_FOR_PHONE"})
     void expiresWithTheReasonOfTheCatedra(ReservationStatus status) {

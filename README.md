@@ -80,7 +80,7 @@ El paciente es siempre el usuario del JWT: el `externalPatientId` es su `externa
 
 ### Endpoints
 
-Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
+Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
 
 `POST /reservations`
 
@@ -109,6 +109,16 @@ Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido l
 ```
 
 `GET /reservations/{id}` devuelve el mismo cuerpo. Solo encuentra los procesos del usuario: el de otro usuario responde `404` como si no existiera. No llama a la cátedra.
+
+`POST /reservations/{id}/phone` envía a la cátedra el teléfono que pidió (`AdditionalInformationRequested`). Solo se acepta mientras el proceso está en `WAITING_FOR_PHONE` y antes de su `expiresAt`.
+
+```json
+{ "phoneNumber": "+54 9 (261) 555-1234" }
+```
+
+Se quitan espacios, guiones, paréntesis y puntos, y lo que queda tiene que cumplir `^\+?[0-9]{7,15}$`, la misma validación que hace la cátedra. Responde `202 Accepted` con el proceso, que sigue en `WAITING_FOR_PHONE`: la cátedra contesta después por Kafka, y la app ve el resultado con `GET /reservations/{id}` (`CONFIRMED`, o `phoneRejectionReason` si lo rechazó). Al enviar se borra el `phoneRejectionReason` del teléfono anterior, para que la app no lo tome como respuesta al nuevo. Después de un rechazo se puede enviar otro teléfono hasta `expiresAt`.
+
+El teléfono **no se guarda**: es un dato personal y solo viaja en el evento a la cátedra. Tampoco aparece en los logs.
 
 El resultado del proceso según la cátedra, `null` cuando no corresponde:
 
@@ -156,14 +166,19 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 | `400` | `INVALID_SLOT` | La cátedra rechazó el hold o la confirmación: el slot no está en la agenda |
 | `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no conoce al profesional |
 | `404` | `USER_NOT_FOUND` | El usuario del token ya no existe |
-| `404` | `RESERVATION_NOT_FOUND` | `GET` de un proceso inexistente o de otro usuario |
+| `400` | `INVALID_PHONE_NUMBER` | El teléfono, sin separadores, no tiene entre 7 y 15 dígitos con un `+` opcional al principio. No se envía |
+| `404` | `RESERVATION_NOT_FOUND` | `GET` o envío del teléfono de un proceso inexistente o de otro usuario |
 | `409` | `SLOT_ALREADY_RESERVED` | El slot ya tiene una reserva confirmada |
 | `409` | `SLOT_ALREADY_HELD` | El slot tiene un hold activo de otro proceso |
 | `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento. Si lo que cambió el proceso fue un evento de la cátedra que lo dejó en `WAITING_FOR_PHONE` o `CONFIRMED`, no hay conflicto: se devuelve ese proceso |
+| `409` | `RESERVATION_NOT_WAITING_FOR_PHONE` | Se envió un teléfono a un proceso que no está en `WAITING_FOR_PHONE` |
+| `409` | `PHONE_NOT_REQUESTED_YET` | El proceso está en `WAITING_FOR_PHONE` pero todavía no llegó el `AdditionalInformationRequested`, cuyo `eventId` hace falta para enviar el teléfono. Reintentar en unos segundos |
 | `410` | `HOLD_EXPIRED` | El hold venció antes de confirmarse |
+| `410` | `RESERVATION_EXPIRED` | Se envió un teléfono después del `expiresAt` del proceso. El estado lo cierra la cátedra con `AppointmentProcessExpired` |
 | `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
 | `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
 | `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT` |
+| `503` | `PHONE_SUBMISSION_UNAVAILABLE` | Kafka no confirmó el envío del teléfono dentro de `CATEDRA_KAFKA_SEND_TIMEOUT`. El proceso sigue esperando el teléfono y se puede enviar de nuevo |
 | `503` | `RESERVATION_PENDING` | La cátedra no respondió y no se sabe si la operación tuvo efecto; incluye `reservationId`. Repetir el mismo `POST` continúa ese proceso |
 
 `RESERVATION_PROCESS_ALREADY_CONFIRMED` no llega a la app: significa que una confirmación anterior del mismo proceso sí llegó, y se trata como éxito.
@@ -186,5 +201,7 @@ Después de la confirmación, el proceso avanza con los eventos que la cátedra 
 - **Proceso desconocido.** Un evento de un `reservationProcessId` que no existe localmente se registra y se ignora.
 - **Mensaje ilegible.** JSON inválido, sin `eventId`, `eventType` o `reservationProcessId`, con un `eventType` desconocido o con un `schemaVersion` distinto de `1`: se deja en el log (`WARN`, con partición y offset) y se saltea, sin reintentar. Los campos desconocidos se ignoran.
 - **Error al procesar.** Si falla aplicar un evento legible (por ejemplo, la base no responde o otro request cambió el proceso), el mensaje se reintenta en el lugar con espera exponencial (1 s, 2 s, 4 s… hasta 30 s entre intentos) durante `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` (2 minutos por defecto). Mientras tanto la partición espera.
+
+**Envío del teléfono.** `AdditionalInformationSubmitted` se publica en `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` (sección 15.5) con message key `reservationProcessId`, un `eventId` nuevo en cada envío, el `requestEventId` guardado, `groupId` de `CATEDRA_GROUP_ID` y `schemaVersion` `1`. El envío es síncrono: se espera que todas las réplicas lo confirmen (`acks=all`, productor idempotente) durante como máximo `CATEDRA_KAFKA_SEND_TIMEOUT` (`PT5S` por defecto) para obtener la metadata del broker y otro tanto para la confirmación. El proceso se guarda antes de publicar; si un evento de la cátedra lo cambió entretanto, no se publica nada y la app recibe `409 RESERVATION_IN_PROGRESS`. Un timeout no prueba que el teléfono no haya llegado (sección 18.4): si la app lo reenvía y la cátedra ya había confirmado con el primero, el evento que responda al segundo llega tarde y se ignora.
 
 **Limitación.** Si el evento sigue fallando al agotar los reintentos, se registra en el log como `ERROR` con su contenido completo y **se saltea**, para no bloquear la partición indefinidamente. Ese evento no se aplica: el contrato no define un topic de errores (DLT) donde dejarlo. El estado persistido en la cátedra se puede reconciliar por REST (`GET /api/appointments`, sección 11); esa reconciliación todavía no está implementada.
