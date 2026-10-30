@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import java.time.Duration;
 
 import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.assertFailsOn;
+import static com.toneatti.turnos.support.ConfigurationPropertiesAssertions.withEnvironmentVariables;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CatalogoServicePropertiesTest {
@@ -34,6 +35,18 @@ class CatalogoServicePropertiesTest {
     @Test
     void bindsConfiguredTimeouts() {
         contextRunner.withPropertyValues("catalogo.connect-timeout=PT1S", "catalogo.read-timeout=PT0.5S")
+                .run(context -> {
+                    CatalogoServiceProperties properties = context.getBean(CatalogoServiceProperties.class);
+
+                    assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.readTimeout()).isEqualTo(Duration.ofMillis(500));
+                });
+    }
+
+    // The variables documented in application.properties and .env.example.
+    @Test
+    void bindsTheTimeoutsFromEnvironmentVariables() {
+        withEnvironmentVariables(contextRunner, "CATALOGO_CONNECT_TIMEOUT=PT1S", "CATALOGO_READ_TIMEOUT=PT0.5S")
                 .run(context -> {
                     CatalogoServiceProperties properties = context.getBean(CatalogoServiceProperties.class);
 
