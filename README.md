@@ -72,6 +72,32 @@ Al registrarse, la contraseña debe tener entre 8 y 128 caracteres; el login tam
 
 La base es H2 en memoria, así que no hay hashes BCrypt viejos que migrar: al reiniciar, todos los usuarios se registran de nuevo con Argon2id.
 
+## Catálogo
+
+La app habla solo con este servicio, así que turnos le expone las categorías y los profesionales que lee de Servicio-catalogo (`CATALOGO_BASE_URL`). No guarda copia ni caché: cada request consulta el catálogo, para que una baja que llega por la sincronización con la cátedra se vea enseguida.
+
+### Endpoints
+
+Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
+
+`GET /professional-categories` lista las categorías habilitadas. Las deshabilitadas las excluye Servicio-catalogo.
+
+```json
+[
+  { "id": 1, "name": "Clinica medica", "description": "Atencion clinica general" }
+]
+```
+
+Si no hay categorías, `200 OK` con `[]`.
+
+### Errores
+
+En `application/problem+json` con un `code` estable, la misma convención de la cátedra.
+
+| HTTP | `code` | Cuándo |
+| --- | --- | --- |
+| `503` | `SERVICE_UNAVAILABLE` | Servicio-catalogo no respondió, respondió un error o una respuesta ilegible. El detalle queda solo en el log |
+
 ## Reservas
 
 Un usuario autenticado inicia una reserva eligiendo un slot. El servicio pide el hold a la cátedra (`POST /api/appointment-holds`) y lo confirma enseguida (`POST /api/appointment-holds/{holdId}/confirm`), porque entre los dos pasos la app no tiene nada que agregar. El paso del teléfono (Kafka) llega después.
