@@ -7,6 +7,7 @@ import com.toneatti.turnos.reservation.domain.model.StartedReservation;
 import com.toneatti.turnos.reservation.domain.ports.in.ApplyAppointmentActionUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
+import com.toneatti.turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -37,6 +38,9 @@ class ReservationServiceTest {
 
     @Mock
     private ApplyAppointmentActionUseCase applyAppointmentActionUseCase;
+
+    @Mock
+    private SubmitPhoneUseCase submitPhoneUseCase;
 
     @InjectMocks
     private ReservationService reservationService;
@@ -73,6 +77,23 @@ class ReservationServiceTest {
         when(getReservationByIdUseCase.getReservationById("user-42", 99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> reservationService.getReservationById("user-42", 99L))
+                .isInstanceOf(ReservationException.class)
+                .hasMessageContaining("99");
+    }
+
+    @Test
+    void submitPhoneReturnsTheProcessOfTheUseCase() {
+        ReservationProcess process = ReservationProcess.start("user-42", 15L, DAY, NINE_THIRTY, Instant.now());
+        when(submitPhoneUseCase.submitPhone("user-42", 7L, "+5492615551234")).thenReturn(Optional.of(process));
+
+        assertThat(reservationService.submitPhone("user-42", 7L, "+5492615551234")).isSameAs(process);
+    }
+
+    @Test
+    void submitPhoneThrowsReservationExceptionWhenItIsNotFound() {
+        when(submitPhoneUseCase.submitPhone("user-42", 99L, "+5492615551234")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.submitPhone("user-42", 99L, "+5492615551234"))
                 .isInstanceOf(ReservationException.class)
                 .hasMessageContaining("99");
     }

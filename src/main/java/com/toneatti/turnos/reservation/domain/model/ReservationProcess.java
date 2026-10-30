@@ -147,6 +147,18 @@ public class ReservationProcess {
         return true;
     }
 
+    /**
+     * The user sent a phone number. Not a transition: the process keeps waiting until the cátedra answers, and the
+     * rejection of the previous phone no longer applies, so the app does not take it as the answer to this one.
+     */
+    public void submitPhone(Instant now) {
+        if (status != ReservationStatus.WAITING_FOR_PHONE) {
+            throw new IllegalStateException("Reservation process " + id + " is not waiting for a phone but " + status);
+        }
+        this.phoneRejectionReason = null;
+        this.updatedAt = now;
+    }
+
     private boolean finish(ReservationStatus next, String reason, Instant now) {
         if (!status.canTransitionTo(next)) {
             return false;

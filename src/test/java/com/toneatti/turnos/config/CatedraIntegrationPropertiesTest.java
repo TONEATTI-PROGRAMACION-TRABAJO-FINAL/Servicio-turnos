@@ -21,6 +21,7 @@ class CatedraIntegrationPropertiesTest {
             .withPropertyValues(
                     "catedra.api-base-url=http://localhost:8089",
                     "catedra.jwt=test-jwt",
+                    "catedra.group-id=proyecto-test",
                     "catedra.kafka.bootstrap-servers=localhost:9092",
                     "catedra.kafka.consumer-group-id=alumnos-test",
                     "catedra.kafka.appointment-actions-topic=alumnos.turnos.acciones.test",
@@ -34,6 +35,7 @@ class CatedraIntegrationPropertiesTest {
 
             assertThat(properties.apiBaseUrl()).isEqualTo("http://localhost:8089");
             assertThat(properties.jwt()).isEqualTo("test-jwt");
+            assertThat(properties.groupId()).isEqualTo("proyecto-test");
             assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(2));
             assertThat(properties.readTimeout()).isEqualTo(Duration.ofSeconds(5));
             assertThat(properties.kafka().bootstrapServers()).isEqualTo("localhost:9092");
@@ -43,6 +45,7 @@ class CatedraIntegrationPropertiesTest {
             assertThat(properties.kafka().securityProtocol()).isEqualTo("PLAINTEXT");
             assertThat(properties.kafka().autoOffsetReset()).isEqualTo("earliest");
             assertThat(properties.kafka().retryMaxElapsedTime()).isEqualTo(Duration.ofMinutes(2));
+            assertThat(properties.kafka().sendTimeout()).isEqualTo(Duration.ofSeconds(5));
             assertThat(properties.kafka().listenerEnabled()).isTrue();
         });
     }
@@ -62,6 +65,29 @@ class CatedraIntegrationPropertiesTest {
                     assertThat(kafka.retryMaxElapsedTime()).isEqualTo(Duration.ofSeconds(30));
                     assertThat(kafka.listenerEnabled()).isFalse();
                 });
+    }
+
+    // The variables documented in application.properties and .env.example.
+    @Test
+    void bindsTheGroupIdAndTheSendTimeoutFromEnvironmentVariables() {
+        withEnvironmentVariables(contextRunner, "CATEDRA_GROUP_ID=proyecto-juan-perez",
+                "CATEDRA_KAFKA_SEND_TIMEOUT=PT1.5S")
+                .run(context -> {
+                    CatedraIntegrationProperties properties = context.getBean(CatedraIntegrationProperties.class);
+
+                    assertThat(properties.groupId()).isEqualTo("proyecto-juan-perez");
+                    assertThat(properties.kafka().sendTimeout()).isEqualTo(Duration.ofMillis(1_500));
+                });
+    }
+
+    @Test
+    void failsWhenTheGroupIdIsMissing() {
+        assertFailsOn(contextRunner, "groupId", "catedra.group-id=");
+    }
+
+    @Test
+    void failsWhenTheSendTimeoutIsNotPositive() {
+        assertFailsOn(contextRunner, "kafka.sendTimeout", "catedra.kafka.send-timeout=PT0S");
     }
 
     @Test

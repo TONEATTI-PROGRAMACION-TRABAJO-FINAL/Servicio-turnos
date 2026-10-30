@@ -9,18 +9,13 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
 
-import java.time.Duration;
-
+import static com.toneatti.turnos.reservation.infrastructure.kafka.config.CatedraKafkaTestProperties.withSecurityProtocol;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
 class AppointmentActionsKafkaConfigTest {
 
-    private static final CatedraIntegrationProperties PROPERTIES = new CatedraIntegrationProperties(
-            "http://localhost:8089", "test-jwt", Duration.ofSeconds(2), Duration.ofSeconds(5),
-            new CatedraIntegrationProperties.Kafka("kafka.catedra.example.com:9092", "alumnos-test",
-                    "alumnos.turnos.acciones.test", "catedra.turnos.telefono.test", "SASL_SSL", "latest",
-                    Duration.ofMinutes(2), false));
+    private static final CatedraIntegrationProperties PROPERTIES = withSecurityProtocol("SASL_SSL");
 
     private final AppointmentActionsKafkaConfig config = new AppointmentActionsKafkaConfig();
 
@@ -30,7 +25,7 @@ class AppointmentActionsKafkaConfigTest {
         ConsumerFactory<String, String> consumerFactory = config.appointmentActionsConsumerFactory(PROPERTIES);
 
         assertThat(consumerFactory.getConfigurationProperties()).contains(
-                entry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka.catedra.example.com:9092"),
+                entry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:19092"),
                 entry(ConsumerConfig.GROUP_ID_CONFIG, "alumnos-test"),
                 entry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"),
                 entry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false),
