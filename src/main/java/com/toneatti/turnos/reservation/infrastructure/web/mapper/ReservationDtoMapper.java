@@ -24,6 +24,9 @@ public class ReservationDtoMapper {
                 .startTime(domain.getStartTime().format(TIME))
                 .status(domain.getStatus().name())
                 .expiresAt(format(domain.getExpiresAt()))
+                .failureCode(domain.getFailureCode())
+                .phoneRejectionReason(domain.getPhoneRejectionReason())
+                .cancellationReason(domain.getCancellationReason())
                 .createdAt(format(domain.getCreatedAt()))
                 .build();
     }

@@ -40,7 +40,43 @@ class CatedraIntegrationPropertiesTest {
             assertThat(properties.kafka().consumerGroupId()).isEqualTo("alumnos-test");
             assertThat(properties.kafka().appointmentActionsTopic()).isEqualTo("alumnos.turnos.acciones.test");
             assertThat(properties.kafka().appointmentPhoneTopic()).isEqualTo("catedra.turnos.telefono.test");
+            assertThat(properties.kafka().securityProtocol()).isEqualTo("PLAINTEXT");
+            assertThat(properties.kafka().autoOffsetReset()).isEqualTo("earliest");
+            assertThat(properties.kafka().retryMaxElapsedTime()).isEqualTo(Duration.ofMinutes(2));
+            assertThat(properties.kafka().listenerEnabled()).isTrue();
         });
+    }
+
+    // The variables documented in application.properties and .env.example.
+    @Test
+    void bindsTheKafkaConsumerSettingsFromEnvironmentVariables() {
+        withEnvironmentVariables(contextRunner, "CATEDRA_KAFKA_SECURITY_PROTOCOL=SASL_SSL",
+                "CATEDRA_KAFKA_AUTO_OFFSET_RESET=latest", "CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME=PT30S",
+                "CATEDRA_KAFKA_LISTENER_ENABLED=false")
+                .run(context -> {
+                    CatedraIntegrationProperties.Kafka kafka =
+                            context.getBean(CatedraIntegrationProperties.class).kafka();
+
+                    assertThat(kafka.securityProtocol()).isEqualTo("SASL_SSL");
+                    assertThat(kafka.autoOffsetReset()).isEqualTo("latest");
+                    assertThat(kafka.retryMaxElapsedTime()).isEqualTo(Duration.ofSeconds(30));
+                    assertThat(kafka.listenerEnabled()).isFalse();
+                });
+    }
+
+    @Test
+    void failsWhenTheSecurityProtocolIsUnknown() {
+        assertFailsOn(contextRunner, "kafka.securityProtocol", "catedra.kafka.security-protocol=TLS");
+    }
+
+    @Test
+    void failsWhenTheAutoOffsetResetIsNotEarliestNorLatest() {
+        assertFailsOn(contextRunner, "kafka.autoOffsetReset", "catedra.kafka.auto-offset-reset=none");
+    }
+
+    @Test
+    void failsWhenTheRetryTimeIsNotPositive() {
+        assertFailsOn(contextRunner, "kafka.retryMaxElapsedTime", "catedra.kafka.retry-max-elapsed-time=PT0S");
     }
 
     @Test

@@ -1,8 +1,10 @@
 package com.toneatti.turnos.reservation.application.service;
 
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
+import com.toneatti.turnos.reservation.domain.model.AppointmentActionOutcome;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
+import com.toneatti.turnos.reservation.domain.ports.in.ApplyAppointmentActionUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Optional;
 
+import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.CONFIRMATION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
@@ -31,6 +34,9 @@ class ReservationServiceTest {
 
     @Mock
     private GetReservationByIdUseCase getReservationByIdUseCase;
+
+    @Mock
+    private ApplyAppointmentActionUseCase applyAppointmentActionUseCase;
 
     @InjectMocks
     private ReservationService reservationService;
@@ -69,5 +75,13 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.getReservationById("user-42", 99L))
                 .isInstanceOf(ReservationException.class)
                 .hasMessageContaining("99");
+    }
+
+    @Test
+    void applyAppointmentActionReturnsTheOutcomeOfTheUseCase() {
+        when(applyAppointmentActionUseCase.applyAppointmentAction(CONFIRMATION))
+                .thenReturn(AppointmentActionOutcome.APPLIED);
+
+        assertThat(reservationService.applyAppointmentAction(CONFIRMATION)).isEqualTo(AppointmentActionOutcome.APPLIED);
     }
 }

@@ -3,6 +3,7 @@ package com.toneatti.turnos.config;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import org.hibernate.validator.constraints.URL;
 import org.hibernate.validator.constraints.time.DurationMin;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -13,7 +14,7 @@ import java.time.Duration;
 
 /**
  * Connection data for the cátedra service (sections 3, 5 and 15 of the integration contract) and the timeouts of its
- * REST client.
+ * REST client. The contract gives Kafka no credentials, so its security protocol defaults to PLAINTEXT.
  * Values come from environment variables; the JWT is masked in toString so it never reaches the logs.
  */
 @Validated
@@ -33,10 +34,20 @@ public record CatedraIntegrationProperties(
                 + ", connectTimeout=" + connectTimeout + ", readTimeout=" + readTimeout + ", kafka=" + kafka + "]";
     }
 
+    /**
+     * {@code autoOffsetReset} is where a consumer group without committed offsets starts: earliest, so the events
+     * published before the first start are not lost. {@code retryMaxElapsedTime} bounds the retries of an event whose
+     * processing fails. {@code listenerEnabled} false leaves the consumer stopped, for tests without a broker.
+     */
     public record Kafka(
             @NotBlank String bootstrapServers,
             @NotBlank String consumerGroupId,
             @NotBlank String appointmentActionsTopic,
-            @NotBlank String appointmentPhoneTopic) {
+            @NotBlank String appointmentPhoneTopic,
+            @NotNull @Pattern(regexp = "PLAINTEXT|SSL|SASL_PLAINTEXT|SASL_SSL") @DefaultValue("PLAINTEXT")
+            String securityProtocol,
+            @NotNull @Pattern(regexp = "earliest|latest") @DefaultValue("earliest") String autoOffsetReset,
+            @NotNull @DurationMin(millis = 1) @DefaultValue("PT2M") Duration retryMaxElapsedTime,
+            @DefaultValue("true") boolean listenerEnabled) {
     }
 }
