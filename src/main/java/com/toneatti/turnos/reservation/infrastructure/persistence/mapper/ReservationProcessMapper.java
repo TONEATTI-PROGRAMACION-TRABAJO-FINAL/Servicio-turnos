@@ -22,6 +22,10 @@ public class ReservationProcessMapper {
                 .reservationProcessId(process.getReservationProcessId())
                 .expiresAt(process.getExpiresAt())
                 .failureCode(process.getFailureCode())
+                .requestEventId(process.getRequestEventId())
+                .catedraReservationId(process.getCatedraReservationId())
+                .phoneRejectionReason(process.getPhoneRejectionReason())
+                .cancellationReason(process.getCancellationReason())
                 // See the unique constraint of ReservationProcessEntity.
                 .active(process.isActive() ? Boolean.TRUE : null)
                 .createdAt(process.getCreatedAt())
@@ -45,6 +49,10 @@ public class ReservationProcessMapper {
                 entity.getReservationProcessId(),
                 entity.getExpiresAt(),
                 entity.getFailureCode(),
+                entity.getRequestEventId(),
+                entity.getCatedraReservationId(),
+                entity.getPhoneRejectionReason(),
+                entity.getCancellationReason(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getVersion());

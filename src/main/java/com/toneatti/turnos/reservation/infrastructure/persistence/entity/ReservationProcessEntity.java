@@ -50,6 +50,13 @@ public class ReservationProcessEntity {
     private Instant expiresAt;
     @Column(length = 100)
     private String failureCode;
+    private String requestEventId;
+    private Long catedraReservationId;
+    @Column(length = 100)
+    private String phoneRejectionReason;
+    // Up to 500 characters in the cátedra (section 12).
+    @Column(length = 500)
+    private String cancellationReason;
     // TRUE while the process is active and NULL once it is final, never FALSE: a unique constraint treats NULLs as
     // distinct, so it allows any number of finished processes for the same user and slot but only one active one.
     // H2 does not support the partial unique index (WHERE active) that would say the same thing directly.

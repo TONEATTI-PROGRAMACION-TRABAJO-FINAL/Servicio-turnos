@@ -9,6 +9,7 @@ import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
+import com.toneatti.turnos.reservation.application.exception.ConcurrentReservationUpdateException;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
 import com.toneatti.turnos.reservation.application.exception.ReservationRejectedException;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -103,6 +105,29 @@ class StartReservationUseCaseImplTest {
         assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT.plusSeconds(60));
         // Each status is saved before the call to the cátedra that leaves it.
         assertThat(processes.savedStatuses).containsExactly(PENDING_HOLD, HELD, CONFIRMING, WAITING_FOR_PHONE);
+    }
+
+    // The consumer of the AdditionalInformationRequested event saved the process while the confirmation was answered.
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "CONFIRMED"})
+    void returnsWhatTheConsumerOfTheCatedraSavedFirstAfterTheConfirmation(ReservationStatus savedByTheConsumer) {
+        givenAHoldThatTheCatedraConfirms();
+        processes.theConsumerSavesFirst(savedByTheConsumer);
+
+        StartedReservation started = start();
+
+        assertThat(started.process().getStatus()).isEqualTo(savedByTheConsumer);
+        assertThat(started.process()).isSameAs(processes.only());
+    }
+
+    // An event that ended the process is not a successful reservation: the conflict is reported as before.
+    @Test
+    void reportsTheConflictWhenTheConsumerOfTheCatedraEndedTheProcessFirst() {
+        givenAHoldThatTheCatedraConfirms();
+        processes.theConsumerSavesFirst(EXPIRED);
+
+        assertThatStartingFails().isInstanceOf(ConcurrentReservationUpdateException.class);
+        assertThat(processes.only().getStatus()).isEqualTo(EXPIRED);
     }
 
     @Test
@@ -295,10 +320,11 @@ class StartReservationUseCaseImplTest {
                 .confirmHold(anyString(), anyString(), anyString(), anyString());
     }
 
-    @Test
-    void returnsTheActiveProcessOfTheSlotWhenItAlreadyWaitsForThePhone() {
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "CONFIRMED"})
+    void returnsTheActiveProcessOfTheSlotWhenTheCatedraAlreadyConfirmedTheHold(ReservationStatus status) {
         givenTheUser();
-        ReservationProcess existing = processes.storedIn(WAITING_FOR_PHONE, EXPIRES_AT);
+        ReservationProcess existing = processes.storedIn(status, EXPIRES_AT);
 
         StartedReservation started = start();
 
@@ -375,6 +401,12 @@ class StartReservationUseCaseImplTest {
         verifyNoInteractions(catedraRepository);
     }
 
+    private void givenAHoldThatTheCatedraConfirms() {
+        givenTheUser();
+        when(catedraRepository.createHold(15L, DAY, NINE_THIRTY, USER_ID)).thenReturn(HOLD);
+        givenTheConfirmation();
+    }
+
     private void givenTheUser() {
         when(userRepository.findByExternalId(USER_ID)).thenReturn(Optional.of(USER));
     }
@@ -430,6 +462,8 @@ class StartReservationUseCaseImplTest {
 
         private final Map<Long, ReservationProcess> byId = new HashMap<>();
         private final List<ReservationStatus> savedStatuses = new ArrayList<>();
+        // Status in which the consumer of the events of the cátedra saves the process before WAITING_FOR_PHONE is.
+        private ReservationStatus savedFirstByTheConsumer;
 
         @Override
         public ReservationProcess create(ReservationProcess process) {
@@ -442,6 +476,11 @@ class StartReservationUseCaseImplTest {
 
         @Override
         public Optional<ReservationProcess> update(Long id, ReservationProcess process) {
+            if (savedFirstByTheConsumer != null && process.getStatus() == WAITING_FOR_PHONE) {
+                byId.put(id, copyOf(process, id, savedFirstByTheConsumer, process.getExpiresAt()));
+                savedFirstByTheConsumer = null;
+                throw new ConcurrentReservationUpdateException(id, null);
+            }
             byId.put(id, process);
             savedStatuses.add(process.getStatus());
             return Optional.of(process);
@@ -450,6 +489,11 @@ class StartReservationUseCaseImplTest {
         @Override
         public Optional<ReservationProcess> findByIdAndUserExternalId(Long id, String userExternalId) {
             return Optional.ofNullable(byId.get(id));
+        }
+
+        @Override
+        public Optional<ReservationProcess> findByReservationProcessId(String reservationProcessId) {
+            throw new UnsupportedOperationException("Starting a reservation never looks it up by the catedra id");
         }
 
         @Override
@@ -465,6 +509,10 @@ class StartReservationUseCaseImplTest {
             return process;
         }
 
+        void theConsumerSavesFirst(ReservationStatus status) {
+            savedFirstByTheConsumer = status;
+        }
+
         ReservationProcess only() {
             assertThat(byId).hasSize(1);
             return byId.values().iterator().next();
@@ -475,7 +523,8 @@ class StartReservationUseCaseImplTest {
             boolean held = status != PENDING_HOLD;
             return new ReservationProcess(id, process.getUserExternalId(), process.getProfessionalId(),
                     process.getDate(), process.getStartTime(), status, held ? HOLD_ID : null,
-                    held ? "process-a92b47d0" : null, expiresAt, null, process.getCreatedAt(), NOW, 0L);
+                    held ? "process-a92b47d0" : null, expiresAt, null, null, null, null, null,
+                    process.getCreatedAt(), NOW, 0L);
         }
     }
 }

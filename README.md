@@ -17,17 +17,23 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | --- | --- | --- |
 | `CATEDRA_API_BASE_URL` | `catedra.api-base-url` | URL base de la API REST, la envía la cátedra |
 | `CATEDRA_JWT` | `catedra.jwt` | `id_token` de la cuenta técnica (registro o login), el mismo que usa Servicio-catalogo |
+| `CATEDRA_GROUP_ID` | `catedra.group-id` | `integration.groupId`. Va en cada evento que el servicio publica a la cátedra |
 | `CATEDRA_KAFKA_BOOTSTRAP_SERVERS` | `catedra.kafka.bootstrap-servers` | `integration.kafkaBootstrapServers` |
 | `CATEDRA_KAFKA_CONSUMER_GROUP_ID` | `catedra.kafka.consumer-group-id` | `integration.kafkaConsumerGroupId` |
 | `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | `catedra.kafka.appointment-actions-topic` | `integration.kafkaAppointmentActionsTopic` |
 | `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` | `catedra.kafka.appointment-phone-topic` | `integration.kafkaAppointmentPhoneTopic` |
+| `CATEDRA_KAFKA_SECURITY_PROTOCOL` | `catedra.kafka.security-protocol` | Opcional. `PLAINTEXT` por defecto: el contrato no entrega credenciales de Kafka |
+| `CATEDRA_KAFKA_AUTO_OFFSET_RESET` | `catedra.kafka.auto-offset-reset` | Opcional. `earliest` (por defecto) o `latest` |
+| `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` | `catedra.kafka.retry-max-elapsed-time` | Opcional. Cuánto se reintenta un evento cuyo procesamiento falla, en ISO-8601; por defecto `PT2M` |
+| `CATEDRA_KAFKA_SEND_TIMEOUT` | `catedra.kafka.send-timeout` | Opcional. Cuánto espera la publicación de un evento a que el broker la confirme (incluye obtener su metadata), en ISO-8601; por defecto `PT5S` |
+| `CATEDRA_KAFKA_LISTENER_ENABLED` | `catedra.kafka.listener-enabled` | Opcional. `false` deja el consumidor detenido; por defecto `true` |
 | `CATALOGO_BASE_URL` | `catalogo.base-url` | URL base de Servicio-catalogo |
 | `USER_JWT_SECRET` | `user.jwt.secret` | Secreto propio para firmar los JWT de los usuarios (HS256, mínimo 32 bytes). Se genera, por ejemplo, con `openssl rand -base64 48` |
 | `USER_JWT_EXPIRATION` | `user.jwt.expiration` | Opcional. Vigencia del JWT de usuario en formato ISO-8601; por defecto `PT24H` |
 
 Los campos `integration.*` los devuelven `POST /api/student/register`, `POST /api/authenticate` y `GET /api/student/integration`.
 
-Todas son obligatorias salvo `USER_JWT_EXPIRATION`. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
+Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
 
 ### Pasos
 
@@ -46,7 +52,7 @@ El archivo `.env` contiene secretos (JWT técnico y secreto del JWT de usuario):
 
 ### Tests
 
-Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions.
+Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions. El consumidor Kafka queda detenido en los tests, salvo en su test de integración, que lo prueba contra un broker embebido (`@EmbeddedKafka`): no hace falta Docker ni el entorno de la cátedra.
 
 ## Contraseñas
 
@@ -74,7 +80,7 @@ El paciente es siempre el usuario del JWT: el `externalPatientId` es su `externa
 
 ### Endpoints
 
-Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
+Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
 
 `POST /reservations`
 
@@ -95,21 +101,42 @@ Ambos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido l
   "startTime": "09:30",
   "status": "WAITING_FOR_PHONE",
   "expiresAt": "2026-09-10T14:44:50Z",
+  "failureCode": null,
+  "phoneRejectionReason": null,
+  "cancellationReason": null,
   "createdAt": "2026-09-10T14:30:00Z"
 }
 ```
 
 `GET /reservations/{id}` devuelve el mismo cuerpo. Solo encuentra los procesos del usuario: el de otro usuario responde `404` como si no existiera. No llama a la cátedra.
 
-Los ids de la cátedra (`holdId`, `reservationProcessId`) se guardan pero no se exponen.
+`POST /reservations/{id}/phone` envía a la cátedra el teléfono que pidió (`AdditionalInformationRequested`). Solo se acepta mientras el proceso está en `WAITING_FOR_PHONE` y antes de su `expiresAt`.
+
+```json
+{ "phoneNumber": "+54 9 (261) 555-1234" }
+```
+
+Se quitan espacios, guiones, paréntesis y puntos, y lo que queda tiene que cumplir `^\+?[0-9]{7,15}$`, la misma validación que hace la cátedra. Responde `202 Accepted` con el proceso, que sigue en `WAITING_FOR_PHONE`: la cátedra contesta después por Kafka, y la app ve el resultado con `GET /reservations/{id}` (`CONFIRMED`, o `phoneRejectionReason` si lo rechazó). Al enviar se borra el `phoneRejectionReason` del teléfono anterior, para que la app no lo tome como respuesta al nuevo. Después de un rechazo se puede enviar otro teléfono hasta `expiresAt`.
+
+El teléfono **no se guarda**: es un dato personal y solo viaja en el evento a la cátedra. Tampoco aparece en los logs.
+
+El resultado del proceso según la cátedra, `null` cuando no corresponde:
+
+| Campo | Cuándo tiene valor |
+| --- | --- |
+| `failureCode` | `FAILED` o `EXPIRED`: el `code` con que la cátedra rechazó el hold o la confirmación, o el `reason` de `AppointmentProcessInvalid` (por ejemplo `REQUEST_EVENT_MISMATCH`) o de `AppointmentProcessExpired` (`HOLD_EXPIRED`) |
+| `phoneRejectionReason` | La cátedra rechazó el último teléfono (`AdditionalInformationRejected`, por ejemplo `INVALID_PHONE_NUMBER`). Mientras el estado siga en `WAITING_FOR_PHONE`, la app puede pedir otro hasta `expiresAt` |
+| `cancellationReason` | `CANCELLED`, si la cancelación tuvo motivo |
+
+Los ids de la cátedra (`holdId`, `reservationProcessId`, el `requestEventId` del pedido de teléfono y el `reservationId` de la reserva confirmada) se guardan pero no se exponen.
 
 ### Estados
 
 ```
-PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE
-     │            │           │
-     └──▶ FAILED ◀┴───────────┤
-                  └──▶ EXPIRED ◀┘
+PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE ──▶ CONFIRMED ──▶ CANCELLED
+     │            │           │                 │
+     └──▶ FAILED ◀┴───────────┴─────────────────┤
+                  └──▶ EXPIRED ◀┴───────────────┘
 ```
 
 | Estado | Significado |
@@ -117,11 +144,13 @@ PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE
 | `PENDING_HOLD` | Se pidió el hold y todavía no se sabe si existe |
 | `HELD` | La cátedra creó el hold |
 | `CONFIRMING` | Se pidió la confirmación y todavía no se sabe si llegó |
-| `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt` |
-| `FAILED` | La cátedra rechazó el hold o la confirmación (se guarda su `code`) |
-| `EXPIRED` | El hold venció antes de confirmarse |
+| `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt`. Un teléfono rechazado no cambia el estado: se puede enviar otro hasta `expiresAt` |
+| `CONFIRMED` | La cátedra confirmó la reserva (`AppointmentConfirmed`) |
+| `CANCELLED` | La reserva confirmada se canceló (`AppointmentCancelled`) |
+| `FAILED` | La cátedra rechazó el hold o la confirmación, o informó el proceso como inválido (`AppointmentProcessInvalid`); se guarda su `code` o `reason` |
+| `EXPIRED` | El hold o el proceso vencieron (`AppointmentProcessExpired`, con su `reason`) |
 
-`FAILED` y `EXPIRED` son finales: una respuesta tardía no los reabre, y el usuario puede iniciar otra reserva para el mismo slot. Cada estado se guarda **antes** de la llamada a la cátedra que lo deja, así que después de un timeout queda registrado qué pudo haber pasado. La vigencia del hold es la `expiresAt` de la cátedra; si ya pasó, el proceso se marca `EXPIRED` sin volver a llamarla.
+`FAILED`, `EXPIRED` y `CANCELLED` son finales: una respuesta o un evento tardío no los reabre, y el usuario puede iniciar otra reserva para el mismo slot. `CONFIRMED` no es final, porque todavía se puede cancelar, pero ningún evento tardío lo hace volver atrás, vencer ni fallar; iniciar de nuevo la reserva del mismo slot la devuelve tal como está. Cada estado se guarda **antes** de la llamada a la cátedra que lo deja, así que después de un timeout queda registrado qué pudo haber pasado. La vigencia del hold es la `expiresAt` de la cátedra; si ya pasó, el proceso se marca `EXPIRED` sin volver a llamarla.
 
 Un usuario tiene como máximo un proceso activo por slot (profesional, fecha y hora). Lo garantiza una restricción única en `reservation_processes` sobre `(user_external_id, professional_id, slot_date, start_time, active)`, donde `active` vale `TRUE` mientras el proceso no es final y `NULL` después: la restricción trata los `NULL` como distintos, así que admite cualquier cantidad de procesos terminados y uno solo activo.
 
@@ -137,14 +166,19 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 | `400` | `INVALID_SLOT` | La cátedra rechazó el hold o la confirmación: el slot no está en la agenda |
 | `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no conoce al profesional |
 | `404` | `USER_NOT_FOUND` | El usuario del token ya no existe |
-| `404` | `RESERVATION_NOT_FOUND` | `GET` de un proceso inexistente o de otro usuario |
+| `400` | `INVALID_PHONE_NUMBER` | El teléfono, sin separadores, no tiene entre 7 y 15 dígitos con un `+` opcional al principio. No se envía |
+| `404` | `RESERVATION_NOT_FOUND` | `GET` o envío del teléfono de un proceso inexistente o de otro usuario |
 | `409` | `SLOT_ALREADY_RESERVED` | El slot ya tiene una reserva confirmada |
 | `409` | `SLOT_ALREADY_HELD` | El slot tiene un hold activo de otro proceso |
-| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento |
+| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento. Si lo que cambió el proceso fue un evento de la cátedra que lo dejó en `WAITING_FOR_PHONE` o `CONFIRMED`, no hay conflicto: se devuelve ese proceso |
+| `409` | `RESERVATION_NOT_WAITING_FOR_PHONE` | Se envió un teléfono a un proceso que no está en `WAITING_FOR_PHONE` |
+| `409` | `PHONE_NOT_REQUESTED_YET` | El proceso está en `WAITING_FOR_PHONE` pero todavía no llegó el `AdditionalInformationRequested`, cuyo `eventId` hace falta para enviar el teléfono. Reintentar en unos segundos |
 | `410` | `HOLD_EXPIRED` | El hold venció antes de confirmarse |
+| `410` | `RESERVATION_EXPIRED` | Se envió un teléfono después del `expiresAt` del proceso. El estado lo cierra la cátedra con `AppointmentProcessExpired` |
 | `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
 | `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
 | `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT` |
+| `503` | `PHONE_SUBMISSION_UNAVAILABLE` | Kafka no confirmó el envío del teléfono dentro de `CATEDRA_KAFKA_SEND_TIMEOUT`. El proceso sigue esperando el teléfono y se puede enviar de nuevo |
 | `503` | `RESERVATION_PENDING` | La cátedra no respondió y no se sabe si la operación tuvo efecto; incluye `reservationId`. Repetir el mismo `POST` continúa ese proceso |
 
 `RESERVATION_PROCESS_ALREADY_CONFIRMED` no llega a la app: significa que una confirmación anterior del mismo proceso sí llegó, y se trata como éxito.
@@ -157,3 +191,17 @@ Un timeout, un `5xx` o una respuesta ilegible no prueban que la operación haya 
 - **Confirmación sin respuesta.** Se buscan las reservas del paciente para ese día (`GET /api/appointments`). Si aparece el `reservationProcessId` del proceso, la confirmación llegó y no se repite. Si no aparece, se confirma una vez más; si la primera llegó entretanto, la cátedra responde `RESERVATION_PROCESS_ALREADY_CONFIRMED` y se toma como éxito.
 
 Los timeouts del cliente REST de la cátedra son `PT2S` de conexión y `PT5S` de lectura por defecto; `CATEDRA_CONNECT_TIMEOUT` y `CATEDRA_READ_TIMEOUT` los cambian (duración ISO-8601).
+
+### Eventos de la cátedra (Kafka)
+
+Después de la confirmación, el proceso avanza con los eventos que la cátedra publica en `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` (secciones 15.4 y 15.6 a 15.10 del contrato): `AdditionalInformationRequested` guarda su `eventId` como `requestEventId` (lo necesita el envío del teléfono), y los demás llevan el proceso a los estados de la tabla de arriba.
+
+- **Al menos una vez.** El offset se confirma recién después de procesar cada mensaje, nunca automáticamente. Cada `eventId` procesado se guarda en `processed_appointment_actions` (con restricción única), en la misma transacción que el cambio del proceso: un mensaje repetido se reconoce y no repite efectos (sección 18.1).
+- **Eventos tardíos.** Un evento que el estado actual no admite (por ejemplo, una confirmación sobre un proceso `EXPIRED`) se registra y se ignora: no reabre un estado final ni hace retroceder una reserva confirmada (sección 18.3).
+- **Proceso desconocido.** Un evento de un `reservationProcessId` que no existe localmente se registra y se ignora.
+- **Mensaje ilegible.** JSON inválido, sin `eventId`, `eventType` o `reservationProcessId`, con un `eventType` desconocido o con un `schemaVersion` distinto de `1`: se deja en el log (`WARN`, con partición y offset) y se saltea, sin reintentar. Los campos desconocidos se ignoran.
+- **Error al procesar.** Si falla aplicar un evento legible (por ejemplo, la base no responde o otro request cambió el proceso), el mensaje se reintenta en el lugar con espera exponencial (1 s, 2 s, 4 s… hasta 30 s entre intentos) durante `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` (2 minutos por defecto). Mientras tanto la partición espera.
+
+**Envío del teléfono.** `AdditionalInformationSubmitted` se publica en `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` (sección 15.5) con message key `reservationProcessId`, un `eventId` nuevo en cada envío, el `requestEventId` guardado, `groupId` de `CATEDRA_GROUP_ID` y `schemaVersion` `1`. El envío es síncrono: se espera que todas las réplicas lo confirmen (`acks=all`, productor idempotente) durante como máximo `CATEDRA_KAFKA_SEND_TIMEOUT` (`PT5S` por defecto) para obtener la metadata del broker y otro tanto para la confirmación. El proceso se guarda antes de publicar; si un evento de la cátedra lo cambió entretanto, no se publica nada y la app recibe `409 RESERVATION_IN_PROGRESS`. Un timeout no prueba que el teléfono no haya llegado (sección 18.4): si la app lo reenvía y la cátedra ya había confirmado con el primero, el evento que responda al segundo llega tarde y se ignora.
+
+**Limitación.** Si el evento sigue fallando al agotar los reintentos, se registra en el log como `ERROR` con su contenido completo y **se saltea**, para no bloquear la partición indefinidamente. Ese evento no se aplica: el contrato no define un topic de errores (DLT) donde dejarlo. El estado persistido en la cátedra se puede reconciliar por REST (`GET /api/appointments`, sección 11); esa reconciliación todavía no está implementada.
