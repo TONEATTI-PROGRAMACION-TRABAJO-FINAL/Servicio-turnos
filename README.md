@@ -17,6 +17,7 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | --- | --- | --- |
 | `CATEDRA_API_BASE_URL` | `catedra.api-base-url` | URL base de la API REST, la envía la cátedra |
 | `CATEDRA_JWT` | `catedra.jwt` | `id_token` de la cuenta técnica (registro o login), el mismo que usa Servicio-catalogo |
+| `CATEDRA_GROUP_ID` | `catedra.group-id` | `integration.groupId`. Va en cada evento que el servicio publica a la cátedra |
 | `CATEDRA_KAFKA_BOOTSTRAP_SERVERS` | `catedra.kafka.bootstrap-servers` | `integration.kafkaBootstrapServers` |
 | `CATEDRA_KAFKA_CONSUMER_GROUP_ID` | `catedra.kafka.consumer-group-id` | `integration.kafkaConsumerGroupId` |
 | `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | `catedra.kafka.appointment-actions-topic` | `integration.kafkaAppointmentActionsTopic` |
@@ -24,6 +25,7 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | `CATEDRA_KAFKA_SECURITY_PROTOCOL` | `catedra.kafka.security-protocol` | Opcional. `PLAINTEXT` por defecto: el contrato no entrega credenciales de Kafka |
 | `CATEDRA_KAFKA_AUTO_OFFSET_RESET` | `catedra.kafka.auto-offset-reset` | Opcional. `earliest` (por defecto) o `latest` |
 | `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` | `catedra.kafka.retry-max-elapsed-time` | Opcional. Cuánto se reintenta un evento cuyo procesamiento falla, en ISO-8601; por defecto `PT2M` |
+| `CATEDRA_KAFKA_SEND_TIMEOUT` | `catedra.kafka.send-timeout` | Opcional. Cuánto espera la publicación de un evento a que el broker la confirme (incluye obtener su metadata), en ISO-8601; por defecto `PT5S` |
 | `CATEDRA_KAFKA_LISTENER_ENABLED` | `catedra.kafka.listener-enabled` | Opcional. `false` deja el consumidor detenido; por defecto `true` |
 | `CATALOGO_BASE_URL` | `catalogo.base-url` | URL base de Servicio-catalogo |
 | `USER_JWT_SECRET` | `user.jwt.secret` | Secreto propio para firmar los JWT de los usuarios (HS256, mínimo 32 bytes). Se genera, por ejemplo, con `openssl rand -base64 48` |

@@ -14,7 +14,8 @@ import java.time.Duration;
 
 /**
  * Connection data for the cátedra service (sections 3, 5 and 15 of the integration contract) and the timeouts of its
- * REST client. The contract gives Kafka no credentials, so its security protocol defaults to PLAINTEXT.
+ * REST client. {@code groupId} identifies the technical integration (section 2.1) in the events sent to the cátedra.
+ * The contract gives Kafka no credentials, so its security protocol defaults to PLAINTEXT.
  * Values come from environment variables; the JWT is masked in toString so it never reaches the logs.
  */
 @Validated
@@ -22,6 +23,7 @@ import java.time.Duration;
 public record CatedraIntegrationProperties(
         @NotBlank @URL String apiBaseUrl,
         @NotBlank String jwt,
+        @NotBlank String groupId,
         @NotNull @DurationMin(millis = 1) @DefaultValue("PT2S") Duration connectTimeout,
         @NotNull @DurationMin(millis = 1) @DefaultValue("PT5S") Duration readTimeout,
         @NotNull @Valid Kafka kafka) {
@@ -30,14 +32,15 @@ public record CatedraIntegrationProperties(
 
     @Override
     public String toString() {
-        return "CatedraIntegrationProperties[apiBaseUrl=" + apiBaseUrl + ", jwt=" + MASK
+        return "CatedraIntegrationProperties[apiBaseUrl=" + apiBaseUrl + ", jwt=" + MASK + ", groupId=" + groupId
                 + ", connectTimeout=" + connectTimeout + ", readTimeout=" + readTimeout + ", kafka=" + kafka + "]";
     }
 
     /**
      * {@code autoOffsetReset} is where a consumer group without committed offsets starts: earliest, so the events
      * published before the first start are not lost. {@code retryMaxElapsedTime} bounds the retries of an event whose
-     * processing fails. {@code listenerEnabled} false leaves the consumer stopped, for tests without a broker.
+     * processing fails. {@code sendTimeout} bounds how long publishing an event waits for the broker, including
+     * fetching its metadata. {@code listenerEnabled} false leaves the consumer stopped, for tests without a broker.
      */
     public record Kafka(
             @NotBlank String bootstrapServers,
@@ -48,6 +51,7 @@ public record CatedraIntegrationProperties(
             String securityProtocol,
             @NotNull @Pattern(regexp = "earliest|latest") @DefaultValue("earliest") String autoOffsetReset,
             @NotNull @DurationMin(millis = 1) @DefaultValue("PT2M") Duration retryMaxElapsedTime,
+            @NotNull @DurationMin(millis = 1) @DefaultValue("PT5S") Duration sendTimeout,
             @DefaultValue("true") boolean listenerEnabled) {
     }
 }
