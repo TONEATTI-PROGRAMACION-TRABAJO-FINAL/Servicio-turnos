@@ -72,6 +72,53 @@ Al registrarse, la contraseña debe tener entre 8 y 128 caracteres; el login tam
 
 La base es H2 en memoria, así que no hay hashes BCrypt viejos que migrar: al reiniciar, todos los usuarios se registran de nuevo con Argon2id.
 
+## Catálogo
+
+La app habla solo con este servicio, así que turnos le expone las categorías y los profesionales que lee de Servicio-catalogo (`CATALOGO_BASE_URL`). No guarda copia ni caché: cada request consulta el catálogo, para que una baja que llega por la sincronización con la cátedra se vea enseguida.
+
+### Endpoints
+
+Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
+
+`GET /professional-categories` lista las categorías habilitadas. Las deshabilitadas las excluye Servicio-catalogo.
+
+```json
+[
+  { "id": 1, "name": "Clinica medica", "description": "Atencion clinica general" }
+]
+```
+
+Si no hay categorías, `200 OK` con `[]`.
+
+`GET /professionals` lista los profesionales habilitados. Con `categoryId` (query, entero, opcional), solo los de esa categoría; sin él, los de todas.
+
+```json
+[
+  { "id": 15, "categoryId": 1, "firstName": "Ana", "lastName": "Gomez", "enabled": true }
+]
+```
+
+Una categoría sin profesionales habilitados, o inexistente, devuelve `200 OK` con `[]`. Un `categoryId` no numérico responde `400`.
+
+Turnos descarta los profesionales con `enabled: false` aunque el catálogo ya no los lista. Para excluir a los profesionales de una **categoría deshabilitada** confía en Servicio-catalogo: el listado hace una sola llamada y no cruza los profesionales con las categorías.
+
+`GET /professionals/{id}` devuelve un profesional, **habilitado o no**, con el mismo cuerpo que el listado.
+
+```json
+{ "id": 18, "categoryId": 1, "firstName": "Luis", "lastName": "Diaz", "enabled": false }
+```
+
+Un profesional deshabilitado responde `200 OK` con `enabled: false`: la app lo necesita para mostrar el nombre en reservas anteriores, y no le ofrece horarios (si los pide, `GET /available-slots` responde `400 PROFESSIONAL_DISABLED`). Un id inexistente responde `404`; uno no numérico, `400`.
+
+### Errores
+
+En `application/problem+json` con un `code` estable, la misma convención de la cátedra.
+
+| HTTP | `code` | Cuándo |
+| --- | --- | --- |
+| `404` | `PROFESSIONAL_NOT_FOUND` | `GET /professionals/{id}` de un id que Servicio-catalogo no conoce |
+| `503` | `SERVICE_UNAVAILABLE` | Servicio-catalogo no respondió, respondió un error o una respuesta ilegible. El detalle queda solo en el log |
+
 ## Reservas
 
 Un usuario autenticado inicia una reserva eligiendo un slot. El servicio pide el hold a la cátedra (`POST /api/appointment-holds`) y lo confirma enseguida (`POST /api/appointment-holds/{holdId}/confirm`), porque entre los dos pasos la app no tiene nada que agregar. El paso del teléfono (Kafka) llega después.

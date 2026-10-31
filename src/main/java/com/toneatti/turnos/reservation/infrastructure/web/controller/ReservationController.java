@@ -41,6 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 
+import static com.toneatti.turnos.config.ProblemResponses.problem;
+
 @Slf4j
 @RestController
 @RequestMapping("/reservations")
@@ -161,12 +163,5 @@ public class ReservationController {
 
     private static ResponseStatusException reservationNotFound() {
         return problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
-    }
-
-    // Rendered as application/problem+json with a stable "code", the same convention as the cátedra (section 13).
-    private static ResponseStatusException problem(HttpStatus status, String code, String detail) {
-        ResponseStatusException exception = new ResponseStatusException(status, detail);
-        exception.getBody().setProperty("code", code);
-        return exception;
     }
 }
