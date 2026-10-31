@@ -34,6 +34,7 @@ class CatalogoIntegrationTest {
 
     private static final String CATEGORIES_PATH = "/professional-categories";
     private static final String PROFESSIONALS_PATH = "/professionals";
+    private static final String PROFESSIONAL_15_PATH = "/professionals/15";
 
     private static final FakeHttpServer CATALOGO = FakeHttpServer.start();
 
@@ -77,13 +78,13 @@ class CatalogoIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {CATEGORIES_PATH, PROFESSIONALS_PATH})
+    @ValueSource(strings = {CATEGORIES_PATH, PROFESSIONALS_PATH, PROFESSIONAL_15_PATH})
     void answers401WithoutAUserToken(String path) throws Exception {
         mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {CATEGORIES_PATH, PROFESSIONALS_PATH})
+    @ValueSource(strings = {CATEGORIES_PATH, PROFESSIONALS_PATH, PROFESSIONAL_15_PATH})
     void answers503WithoutDetailsOfTheCatalogoWhenItIsDown(String path) throws Exception {
         CATALOGO.respond(path, 500, "{\"status\":500,\"detail\":\"database down\"}");
 
@@ -126,6 +127,49 @@ class CatalogoIntegrationTest {
     @Test
     void answers400WhenTheCategoryIsNotANumber() throws Exception {
         mockMvc.perform(get(PROFESSIONALS_PATH).with(jwt()).param("categoryId", "uno"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void showsAnEnabledProfessional() throws Exception {
+        CATALOGO.respond(PROFESSIONAL_15_PATH, 200, """
+                {"id":15,"categoryId":1,"firstName":"Ana","lastName":"Gomez","enabled":true}
+                """);
+
+        mockMvc.perform(get(PROFESSIONAL_15_PATH).with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(15))
+                .andExpect(jsonPath("$.categoryId").value(1))
+                .andExpect(jsonPath("$.firstName").value("Ana"))
+                .andExpect(jsonPath("$.lastName").value("Gomez"))
+                .andExpect(jsonPath("$.enabled").value(true));
+    }
+
+    @Test
+    void showsADisabledProfessionalWithEnabledFalse() throws Exception {
+        CATALOGO.respond("/professionals/18", 200, """
+                {"id":18,"categoryId":1,"firstName":"Luis","lastName":"Diaz","enabled":false}
+                """);
+
+        mockMvc.perform(get("/professionals/18").with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(18))
+                .andExpect(jsonPath("$.firstName").value("Luis"))
+                .andExpect(jsonPath("$.enabled").value(false));
+    }
+
+    @Test
+    void answers404WhenTheProfessionalDoesNotExist() throws Exception {
+        CATALOGO.respond("/professionals/99", 404, "{\"status\":404,\"title\":\"Not Found\"}");
+
+        expectProblem(mockMvc.perform(get("/professionals/99").with(jwt())), 404, "PROFESSIONAL_NOT_FOUND");
+    }
+
+    @Test
+    void answers400WhenTheProfessionalIdIsNotANumber() throws Exception {
+        mockMvc.perform(get("/professionals/quince").with(jwt()))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
