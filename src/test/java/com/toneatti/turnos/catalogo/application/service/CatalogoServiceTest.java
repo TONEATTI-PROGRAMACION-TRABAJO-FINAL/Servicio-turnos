@@ -1,7 +1,9 @@
 package com.toneatti.turnos.catalogo.application.service;
 
+import com.toneatti.turnos.catalogo.domain.model.Professional;
 import com.toneatti.turnos.catalogo.domain.model.ProfessionalCategory;
 import com.toneatti.turnos.catalogo.domain.ports.in.GetAllProfessionalCategoriesUseCase;
+import com.toneatti.turnos.catalogo.domain.ports.in.GetProfessionalsByCategoryUseCase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,6 +21,9 @@ class CatalogoServiceTest {
     @Mock
     private GetAllProfessionalCategoriesUseCase getAllProfessionalCategoriesUseCase;
 
+    @Mock
+    private GetProfessionalsByCategoryUseCase getProfessionalsByCategoryUseCase;
+
     @InjectMocks
     private CatalogoService catalogoService;
 
@@ -29,5 +34,13 @@ class CatalogoServiceTest {
         when(getAllProfessionalCategoriesUseCase.getAllProfessionalCategories()).thenReturn(categories);
 
         assertThat(catalogoService.getAllProfessionalCategories()).isSameAs(categories);
+    }
+
+    @Test
+    void getProfessionalsByCategoryReturnsTheProfessionalsOfTheUseCase() {
+        List<Professional> professionals = List.of(new Professional(15L, 1L, "Ana", "Gomez", true));
+        when(getProfessionalsByCategoryUseCase.getProfessionalsByCategory(1L)).thenReturn(professionals);
+
+        assertThat(catalogoService.getProfessionalsByCategory(1L)).isSameAs(professionals);
     }
 }

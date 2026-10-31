@@ -90,6 +90,18 @@ Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido l
 
 Si no hay categorías, `200 OK` con `[]`.
 
+`GET /professionals` lista los profesionales habilitados. Con `categoryId` (query, entero, opcional), solo los de esa categoría; sin él, los de todas.
+
+```json
+[
+  { "id": 15, "categoryId": 1, "firstName": "Ana", "lastName": "Gomez", "enabled": true }
+]
+```
+
+Una categoría sin profesionales habilitados, o inexistente, devuelve `200 OK` con `[]`. Un `categoryId` no numérico responde `400`.
+
+Turnos descarta los profesionales con `enabled: false` aunque el catálogo ya no los lista. Para excluir a los profesionales de una **categoría deshabilitada** confía en Servicio-catalogo: el listado hace una sola llamada y no cruza los profesionales con las categorías.
+
 ### Errores
 
 En `application/problem+json` con un `code` estable, la misma convención de la cátedra.
