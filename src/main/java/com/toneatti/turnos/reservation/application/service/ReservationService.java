@@ -1,10 +1,14 @@
 package com.toneatti.turnos.reservation.application.service;
 
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
+import com.toneatti.turnos.reservation.domain.model.AppointmentAction;
+import com.toneatti.turnos.reservation.domain.model.AppointmentActionOutcome;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
+import com.toneatti.turnos.reservation.domain.ports.in.ApplyAppointmentActionUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
+import com.toneatti.turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +21,8 @@ public class ReservationService {
 
     private final StartReservationUseCase startReservationUseCase;
     private final GetReservationByIdUseCase getReservationByIdUseCase;
+    private final ApplyAppointmentActionUseCase applyAppointmentActionUseCase;
+    private final SubmitPhoneUseCase submitPhoneUseCase;
 
     public StartedReservation startReservation(String userExternalId, Long professionalId, LocalDate date,
                                                LocalTime startTime) {
@@ -26,7 +32,20 @@ public class ReservationService {
 
     public ReservationProcess getReservationById(String userExternalId, Long id) {
         return getReservationByIdUseCase.getReservationById(userExternalId, id)
-                .orElseThrow(() -> new ReservationException("Could not find reservation process with id: " + id));
+                .orElseThrow(() -> reservationNotFound(id));
+    }
+
+    public ReservationProcess submitPhone(String userExternalId, Long id, String phoneNumber) {
+        return submitPhoneUseCase.submitPhone(userExternalId, id, phoneNumber)
+                .orElseThrow(() -> reservationNotFound(id));
+    }
+
+    public AppointmentActionOutcome applyAppointmentAction(AppointmentAction action) {
+        return applyAppointmentActionUseCase.applyAppointmentAction(action);
+    }
+
+    private static ReservationException reservationNotFound(Long id) {
+        return new ReservationException("Could not find reservation process with id: " + id);
     }
 
 }

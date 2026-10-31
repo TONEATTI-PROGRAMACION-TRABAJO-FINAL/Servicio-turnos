@@ -408,6 +408,29 @@ class ReservationIntegrationTest {
         assertThat(CATEDRA.requestCount(CONFIRM_PATH)).isZero();
     }
 
+    // What the events of the cátedra left: a rejected phone, then the confirmation and its cancellation.
+    @Test
+    void showsTheOutcomeOfTheCatedraWithoutItsIds() throws Exception {
+        Instant created = Instant.parse("2099-09-10T14:30:00Z");
+        Long id = jpaReservationProcessRepository.save(ReservationProcessEntity.builder()
+                .userExternalId(userExternalId).professionalId(15L)
+                .date(LocalDate.of(2099, 9, 14)).startTime(LocalTime.of(9, 30))
+                .status(ReservationStatus.CANCELLED).holdId("hold-6c0c2f41").reservationProcessId("process-a92b47d0")
+                .requestEventId("request-event-8a31").catedraReservationId(8251L)
+                .phoneRejectionReason("INVALID_PHONE_NUMBER").cancellationReason("Cambio solicitado por el usuario")
+                .expiresAt(created.plusSeconds(890)).createdAt(created).updatedAt(created)
+                .build()).getId();
+
+        getReservation(id, userExternalId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.failureCode").isEmpty())
+                .andExpect(jsonPath("$.phoneRejectionReason").value("INVALID_PHONE_NUMBER"))
+                .andExpect(jsonPath("$.cancellationReason").value("Cambio solicitado por el usuario"))
+                .andExpect(content().string(not(containsString("request-event-8a31"))))
+                .andExpect(content().string(not(containsString("8251"))));
+    }
+
     @Test
     void answers401ToGetAReservationWithoutAUserToken() throws Exception {
         mockMvc.perform(get("/reservations/1"))

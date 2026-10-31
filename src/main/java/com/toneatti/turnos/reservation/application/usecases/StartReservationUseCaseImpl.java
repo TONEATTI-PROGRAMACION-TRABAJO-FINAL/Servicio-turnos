@@ -8,6 +8,7 @@ import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
+import com.toneatti.turnos.reservation.application.exception.ConcurrentReservationUpdateException;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
 import com.toneatti.turnos.reservation.application.exception.ReservationRejectedException;
@@ -15,6 +16,7 @@ import com.toneatti.turnos.reservation.application.exception.ReservationUnavaila
 import com.toneatti.turnos.reservation.application.exception.SlotInThePastException;
 import com.toneatti.turnos.reservation.application.exception.UnexpectedCatedraRejectionException;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
+import com.toneatti.turnos.reservation.domain.model.ReservationStatus;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
 import com.toneatti.turnos.reservation.domain.ports.out.ReservationProcessRepository;
@@ -25,9 +27,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -51,6 +55,8 @@ import static com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejecte
  * calling again, the outcome is reconciled through the occupancies (hold) or the reservations (confirmation) of the
  * cátedra, and each request makes at most {@value #MAX_ATTEMPTS} calls of each kind. When the outcome stays unknown
  * the process remains active, and starting the same reservation again resumes it.
+ * Once the confirmation is accepted, the consumer of the events of the cátedra may move the process before this
+ * request saves it; what that consumer saved is then the current process.
  */
 @Slf4j
 @Component
@@ -62,6 +68,10 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
     // Rejections the user can act on (another slot, another professional). Any other code is our bug.
     private static final Set<String> USER_FACING_CODES = Set.of(PROFESSIONAL_NOT_FOUND, PROFESSIONAL_DISABLED,
             INVALID_SLOT, SLOT_ALREADY_RESERVED, SLOT_ALREADY_HELD, HOLD_NOT_FOUND);
+
+    // Statuses the events of the cátedra leave once it accepted the confirmation and the process is still valid.
+    private static final Set<ReservationStatus> CONFIRMATION_ACCEPTED = EnumSet.of(ReservationStatus.WAITING_FOR_PHONE,
+            ReservationStatus.CONFIRMED);
 
     private final ReservationProcessRepository reservationProcessRepository;
     private final CatedraRepository catedraRepository;
@@ -89,14 +99,16 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
     }
 
     // A double tap or a retry of the app continues the process of the slot instead of holding it twice. The last
-    // call of PENDING_HOLD and CONFIRMING got no answer, so they are reconciled before calling again.
+    // call of PENDING_HOLD and CONFIRMING got no answer, so they are reconciled before calling again. A confirmed
+    // reservation of the slot is already the user's.
     private ReservationProcess resume(ReservationProcess process, User user) {
         return switch (process.getStatus()) {
-            case WAITING_FOR_PHONE -> process;
+            case WAITING_FOR_PHONE, CONFIRMED -> process;
             case PENDING_HOLD -> confirm(hold(process, true), user, false);
             case HELD -> confirm(process, user, false);
             case CONFIRMING -> confirm(process, user, true);
-            case EXPIRED, FAILED -> throw new IllegalStateException("Process " + process.getId() + " is not active");
+            case CANCELLED, EXPIRED, FAILED ->
+                    throw new IllegalStateException("Process " + process.getId() + " is not active");
         };
     }
 
@@ -163,8 +175,7 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
             }
             if (outcomeUnknown) {
                 if (theConfirmationArrived(process)) {
-                    process.markWaitingForPhone(null, clock.instant());
-                    return save(process);
+                    return waitForThePhone(process, null);
                 }
             } else {
                 process.markConfirming(clock.instant());
@@ -173,13 +184,11 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
             try {
                 HoldConfirmation confirmation = catedraRepository.confirmHold(process.getHoldId(),
                         process.getUserExternalId(), user.firstName(), user.lastName());
-                process.markWaitingForPhone(confirmation.expiresAt(), clock.instant());
-                return save(process);
+                return waitForThePhone(process, confirmation.expiresAt());
             } catch (CatedraRequestRejectedException e) {
                 if (RESERVATION_PROCESS_ALREADY_CONFIRMED.equals(e.getCode())) {
                     // An earlier confirmation of this same process reached the cátedra.
-                    process.markWaitingForPhone(null, clock.instant());
-                    return save(process);
+                    return waitForThePhone(process, null);
                 }
                 if (HOLD_EXPIRED.equals(e.getCode())) {
                     throw expire(process);
@@ -192,6 +201,26 @@ public class StartReservationUseCaseImpl implements StartReservationUseCase {
             }
         }
         throw new ReservationPendingException(process.getId(), lastFailure);
+    }
+
+    // The answer of the confirmation and the AdditionalInformationRequested event (section 10) race to leave
+    // CONFIRMING. If the consumer of the event saved first, saving here fails on the version; the process it left is
+    // the current one and, while the confirmation stays accepted, the outcome of this request.
+    private ReservationProcess waitForThePhone(ReservationProcess process, Instant expiresAt) {
+        process.markWaitingForPhone(expiresAt, clock.instant());
+        try {
+            return save(process);
+        } catch (ConcurrentReservationUpdateException e) {
+            ReservationProcess current = reservationProcessRepository
+                    .findByIdAndUserExternalId(process.getId(), process.getUserExternalId())
+                    .orElseThrow(() -> e);
+            if (!CONFIRMATION_ACCEPTED.contains(current.getStatus())) {
+                throw e;
+            }
+            log.info("Reservation process {} was already moved to {} by an event of the catedra", current.getId(),
+                    current.getStatus());
+            return current;
+        }
     }
 
     // The cátedra creates the reservation PHONE_PENDING when it accepts the confirmation (section 10), and it can only

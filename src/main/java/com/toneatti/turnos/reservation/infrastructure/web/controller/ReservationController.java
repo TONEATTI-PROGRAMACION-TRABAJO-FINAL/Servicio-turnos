@@ -2,8 +2,13 @@ package com.toneatti.turnos.reservation.infrastructure.web.controller;
 
 import com.toneatti.turnos.reservation.application.exception.ConcurrentReservationUpdateException;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
+import com.toneatti.turnos.reservation.application.exception.InvalidPhoneNumberException;
+import com.toneatti.turnos.reservation.application.exception.PhoneNotRequestedException;
+import com.toneatti.turnos.reservation.application.exception.PhoneSubmissionUnavailableException;
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
+import com.toneatti.turnos.reservation.application.exception.ReservationExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationInProgressException;
+import com.toneatti.turnos.reservation.application.exception.ReservationNotWaitingForPhoneException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
 import com.toneatti.turnos.reservation.application.exception.ReservationRejectedException;
 import com.toneatti.turnos.reservation.application.exception.ReservationUnavailableException;
@@ -11,6 +16,7 @@ import com.toneatti.turnos.reservation.application.exception.SlotInThePastExcept
 import com.toneatti.turnos.reservation.application.exception.UnexpectedCatedraRejectionException;
 import com.toneatti.turnos.reservation.application.service.ReservationService;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.PhoneNumberRequest;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationRequest;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.mapper.ReservationDtoMapper;
@@ -95,7 +101,38 @@ public class ReservationController {
             return ResponseEntity.ok(reservationDtoMapper.toResponse(
                     reservationService.getReservationById(jwt.getSubject(), id)));
         } catch (ReservationException e) {
-            throw problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
+            throw reservationNotFound();
+        }
+    }
+
+    // 202: the cátedra answers later through its events, which the app sees with GET /reservations/{id}. Another
+    // user's process answers 404 as well.
+    @PostMapping("/{id}/phone")
+    public ResponseEntity<ReservationResponse> submitPhone(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                                           @Valid @RequestBody PhoneNumberRequest request) {
+        try {
+            return ResponseEntity.accepted().body(reservationDtoMapper.toResponse(
+                    reservationService.submitPhone(jwt.getSubject(), id, request.getPhoneNumber())));
+        } catch (ReservationException e) {
+            throw reservationNotFound();
+        } catch (InvalidPhoneNumberException e) {
+            throw problem(HttpStatus.BAD_REQUEST, "INVALID_PHONE_NUMBER",
+                    "The phone number must have 7 to 15 digits and may start with +");
+        } catch (ReservationNotWaitingForPhoneException e) {
+            throw problem(HttpStatus.CONFLICT, "RESERVATION_NOT_WAITING_FOR_PHONE",
+                    "The reservation is not waiting for a phone number");
+        } catch (PhoneNotRequestedException e) {
+            throw problem(HttpStatus.CONFLICT, "PHONE_NOT_REQUESTED_YET",
+                    "The phone number was not requested yet; try again in a moment");
+        } catch (ReservationExpiredException e) {
+            throw problem(HttpStatus.GONE, "RESERVATION_EXPIRED", "The reservation expired");
+        } catch (ConcurrentReservationUpdateException e) {
+            throw problem(HttpStatus.CONFLICT, "RESERVATION_IN_PROGRESS",
+                    "The reservation changed meanwhile; check it and try again");
+        } catch (PhoneSubmissionUnavailableException e) {
+            // Already logged with its cause. The process keeps waiting for the phone, so it can be sent again.
+            throw problem(HttpStatus.SERVICE_UNAVAILABLE, "PHONE_SUBMISSION_UNAVAILABLE",
+                    "The phone number could not be sent; try again");
         }
     }
 
@@ -120,6 +157,10 @@ public class ReservationController {
             // SLOT_ALREADY_RESERVED and SLOT_ALREADY_HELD.
             default -> HttpStatus.CONFLICT;
         };
+    }
+
+    private static ResponseStatusException reservationNotFound() {
+        return problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
     }
 
     // Rendered as application/problem+json with a stable "code", the same convention as the cátedra (section 13).
