@@ -1,11 +1,14 @@
 package com.toneatti.turnos.reservation.application.service;
 
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
 import com.toneatti.turnos.reservation.domain.model.AppointmentActionOutcome;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
 import com.toneatti.turnos.reservation.domain.ports.in.ApplyAppointmentActionUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
+import com.toneatti.turnos.reservation.domain.ports.in.ListReservationsUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 
 import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.CONFIRMATION;
@@ -41,6 +45,9 @@ class ReservationServiceTest {
 
     @Mock
     private SubmitPhoneUseCase submitPhoneUseCase;
+
+    @Mock
+    private ListReservationsUseCase listReservationsUseCase;
 
     @InjectMocks
     private ReservationService reservationService;
@@ -104,5 +111,15 @@ class ReservationServiceTest {
                 .thenReturn(AppointmentActionOutcome.APPLIED);
 
         assertThat(reservationService.applyAppointmentAction(CONFIRMATION)).isEqualTo(AppointmentActionOutcome.APPLIED);
+    }
+
+    @Test
+    void listReservationsReturnsThePageOfTheUseCase() {
+        AppointmentPage page = new AppointmentPage(List.of(), 0);
+        when(listReservationsUseCase.listReservations("user-42", DAY, DAY, AppointmentStatus.CONFIRMED, 0, 20))
+                .thenReturn(page);
+
+        assertThat(reservationService.listReservations("user-42", DAY, DAY, AppointmentStatus.CONFIRMED, 0, 20))
+                .isSameAs(page);
     }
 }
