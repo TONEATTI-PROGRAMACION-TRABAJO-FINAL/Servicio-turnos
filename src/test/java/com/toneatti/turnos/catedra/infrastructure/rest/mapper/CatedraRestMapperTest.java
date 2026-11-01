@@ -2,10 +2,12 @@ package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
 import com.toneatti.turnos.catedra.domain.model.Appointment;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentListResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
@@ -28,6 +30,7 @@ class CatedraRestMapperTest {
         assertThat(catedraRestMapper.toDomainModel((CatedraHoldResponse) null)).isNull();
         assertThat(catedraRestMapper.toDomainModel((CatedraHoldConfirmationResponse) null)).isNull();
         assertThat(catedraRestMapper.toDomainModel((CatedraAppointmentResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraAppointmentListResponse) null)).isNull();
     }
 
     @Test
@@ -69,5 +72,20 @@ class CatedraRestMapperTest {
 
         assertThat(appointment).isEqualTo(new Appointment(8251L, "process-a92b47d0", "user-42",
                 15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), AppointmentStatus.PHONE_PENDING));
+    }
+
+    @Test
+    void mapsEveryFieldOfAnAppointmentSummary() {
+        CatedraAppointmentListResponse response = new CatedraAppointmentListResponse(8251L, "process-a92b47d0",
+                "user-42", 15L, "Ana", "Gomez", LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), LocalTime.of(10, 0),
+                "Juan", "Perez", "+5492615551234", AppointmentStatus.CONFIRMED,
+                Instant.parse("2026-09-10T14:35:00Z"), Instant.parse("2026-09-10T14:36:00Z"), null, null);
+
+        AppointmentSummary summary = catedraRestMapper.toDomainModel(response);
+
+        assertThat(summary).isEqualTo(new AppointmentSummary(8251L, "process-a92b47d0", "user-42", 15L, "Ana",
+                "Gomez", LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), LocalTime.of(10, 0), "Juan", "Perez",
+                "+5492615551234", AppointmentStatus.CONFIRMED, Instant.parse("2026-09-10T14:35:00Z"),
+                Instant.parse("2026-09-10T14:36:00Z"), null, null));
     }
 }

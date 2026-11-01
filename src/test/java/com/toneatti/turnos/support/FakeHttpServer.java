@@ -31,7 +31,7 @@ public final class FakeHttpServer implements AutoCloseable {
     private static final String PROBLEM_JSON = "application/problem+json";
     private static final String JSON = "application/json";
 
-    private record CannedResponse(int status, String body, Duration delay) {
+    private record CannedResponse(int status, String body, Duration delay, Map<String, String> headers) {
     }
 
     private final HttpServer server;
@@ -82,7 +82,14 @@ public final class FakeHttpServer implements AutoCloseable {
     }
 
     public void respondAfter(String path, Duration delay, int status, String body) {
-        responses.put(path, new CannedResponse(status, body, delay));
+        responses.put(path, new CannedResponse(status, body, delay, Map.of()));
+    }
+
+    /**
+     * Like {@link #respond(String, int, String)}, with extra response headers (for example X-Total-Count).
+     */
+    public void respond(String path, int status, Map<String, String> headers, String body) {
+        responses.put(path, new CannedResponse(status, body, Duration.ZERO, headers));
     }
 
     /**
@@ -102,7 +109,7 @@ public final class FakeHttpServer implements AutoCloseable {
 
     public void respondOnceAfter(String path, Duration delay, int status, String body) {
         oneShotResponses.computeIfAbsent(path, ignored -> new ConcurrentLinkedQueue<>())
-                .add(new CannedResponse(status, body, delay));
+                .add(new CannedResponse(status, body, delay, Map.of()));
     }
 
     public URI lastRequestUri() {
@@ -155,7 +162,7 @@ public final class FakeHttpServer implements AutoCloseable {
         Queue<CannedResponse> oneShot = oneShotResponses.get(path);
         CannedResponse queued = oneShot == null ? null : oneShot.poll();
         CannedResponse response = queued != null ? queued : responses.getOrDefault(path,
-                new CannedResponse(404, "{\"status\":404,\"title\":\"Not Found\"}", Duration.ZERO));
+                new CannedResponse(404, "{\"status\":404,\"title\":\"Not Found\"}", Duration.ZERO, Map.of()));
         try {
             Thread.sleep(response.delay());
         } catch (InterruptedException e) {
@@ -163,6 +170,7 @@ public final class FakeHttpServer implements AutoCloseable {
         }
         byte[] body = response.body().getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", response.status() < 400 ? JSON : PROBLEM_JSON);
+        response.headers().forEach((name, value) -> exchange.getResponseHeaders().add(name, value));
         // For the JDK server, length 0 means chunked; -1 means no body at all.
         exchange.sendResponseHeaders(response.status(), body.length == 0 ? -1 : body.length);
         try (OutputStream out = exchange.getResponseBody()) {

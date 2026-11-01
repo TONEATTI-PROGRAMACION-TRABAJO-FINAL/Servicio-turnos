@@ -3,6 +3,8 @@ package com.toneatti.turnos.catedra.domain.ports.out;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
@@ -42,5 +44,13 @@ public interface CatedraRepository {
      * none. Used to find out whether a confirmation whose answer was lost reached the cátedra.
      */
     List<Appointment> findAppointments(String externalPatientId, LocalDate from, LocalDate to);
+
+    /**
+     * Page of the reservations of the patient (section 11), most recent slot first, optionally filtered by
+     * {@code status} and/or a date range; {@code status}, {@code from} and {@code to} null mean no filter on them.
+     * {@code page} is 0-based; the total count is independent of the page.
+     */
+    AppointmentPage findAppointmentsPage(String externalPatientId, LocalDate from, LocalDate to,
+                                         AppointmentStatus status, int page, int size);
 
 }

@@ -3,7 +3,9 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
@@ -28,6 +30,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -404,6 +408,87 @@ class RestCatedraRepositoryAdapterTest {
     }
 
     @Test
+    void findsAPageOfAppointmentsWithEveryFilter() {
+        catedra.respond(APPOINTMENTS_PATH, 200, Map.of("X-Total-Count", "37"), """
+                [{"reservationId":8251,"reservationProcessId":"process-a92b47d0","externalPatientId":"user-42",
+                  "professionalId":15,"professionalFirstName":"Ana","professionalLastName":"Gomez",
+                  "appointmentDate":"2026-09-14","startTime":"09:30:00","endTime":"10:00:00",
+                  "patientFirstName":"Juan","patientLastName":"Perez","patientPhone":"+5492615551234",
+                  "status":"CONFIRMED","createdAt":"2026-09-10T14:35:00Z","confirmedAt":"2026-09-10T14:36:00Z",
+                  "cancelledAt":null,"cancellationReason":null}]
+                """);
+
+        AppointmentPage page = adapter.findAppointmentsPage(PATIENT, DAY, DAY, AppointmentStatus.CONFIRMED, 0, 20);
+
+        assertThat(page).isEqualTo(new AppointmentPage(List.of(new AppointmentSummary(8251L, "process-a92b47d0",
+                PATIENT, 15L, "Ana", "Gomez", DAY, NINE_THIRTY, LocalTime.of(10, 0), "Juan", "Perez",
+                "+5492615551234", AppointmentStatus.CONFIRMED, Instant.parse("2026-09-10T14:35:00Z"),
+                Instant.parse("2026-09-10T14:36:00Z"), null, null)), 37));
+        assertThat(catedra.lastRequestUri().getQuery()).isEqualTo(
+                "externalPatientId=user-42&from=2026-09-14&to=2026-09-14&status=CONFIRMED&page=0&size=20");
+    }
+
+    @Test
+    void omitsOptionalFiltersOfThePageWhenAbsent() {
+        catedra.respond(APPOINTMENTS_PATH, 200, Map.of("X-Total-Count", "0"), "[]");
+
+        adapter.findAppointmentsPage(PATIENT, null, null, null, 0, 20);
+
+        assertThat(catedra.lastRequestUri().getQuery()).isEqualTo("externalPatientId=user-42&page=0&size=20");
+    }
+
+    @Test
+    void fallsBackToTheSizeOfThePageWhenTheTotalCountHeaderIsMissing() {
+        catedra.respond(APPOINTMENTS_PATH, 200, """
+                [{"reservationProcessId":"process-a92b47d0","appointmentDate":"2026-09-14","startTime":"09:30:00",
+                  "status":"CONFIRMED"}]
+                """);
+
+        AppointmentPage page = adapter.findAppointmentsPage(PATIENT, null, null, null, 0, 20);
+
+        assertThat(page.totalCount()).isEqualTo(1);
+    }
+
+    @Test
+    void fallsBackToTheSizeOfThePageWhenTheTotalCountHeaderIsNotANumber() {
+        catedra.respond(APPOINTMENTS_PATH, 200, Map.of("X-Total-Count", "not-a-number"), "[]");
+
+        AppointmentPage page = adapter.findAppointmentsPage(PATIENT, null, null, null, 0, 20);
+
+        assertThat(page.totalCount()).isZero();
+    }
+
+    @Test
+    void findsAnEmptyPageWhenTheBodyIsEmpty() {
+        catedra.respond(APPOINTMENTS_PATH, 200, Map.of("X-Total-Count", "0"), "");
+
+        AppointmentPage page = adapter.findAppointmentsPage(PATIENT, DAY, DAY, null, 0, 20);
+
+        assertThat(page).isEqualTo(new AppointmentPage(List.of(), 0));
+    }
+
+    // Every code of section 13.1 that listing the reservations can answer.
+    @ParameterizedTest
+    @CsvSource({
+            "403, STUDENT_INTEGRATION_NOT_FOUND",
+            "400, INVALID_DATE_RANGE"
+    })
+    void failsAsRejectedWithEachCodeOfFindingAPageOfAppointments(int status, String code) {
+        catedra.respondProblem(APPOINTMENTS_PATH, status, code);
+
+        assertRejectedWith(assertThatFindingAPageOfAppointmentsFails(), status, code, "GET " + APPOINTMENTS_PATH);
+    }
+
+    @Test
+    void failsAsUnavailableWhenFindingAPageOfAppointmentsTakesLongerThanTheReadTimeout() {
+        catedra.respondAfter(APPOINTMENTS_PATH, READ_TIMEOUT.multipliedBy(4), 200, "[]");
+
+        assertThatFindingAPageOfAppointmentsFails()
+                .isInstanceOf(CatedraUnavailableException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
     void failsAsUnavailableWhenFindingAppointmentsTakesLongerThanTheReadTimeout() {
         catedra.respondAfter(APPOINTMENTS_PATH, READ_TIMEOUT.multipliedBy(4), 200, "[]");
 
@@ -424,6 +509,10 @@ class RestCatedraRepositoryAdapterTest {
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheAppointmentsOfADayFails() {
         return assertThatThrownBy(() -> adapter.findAppointments(PATIENT, DAY, DAY));
+    }
+
+    private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingAPageOfAppointmentsFails() {
+        return assertThatThrownBy(() -> adapter.findAppointmentsPage(PATIENT, DAY, DAY, null, 0, 20));
     }
 
     private static void assertRejectedWith(AbstractThrowableAssert<?, ? extends Throwable> failure,
