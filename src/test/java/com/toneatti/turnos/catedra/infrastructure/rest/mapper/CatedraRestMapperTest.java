@@ -1,6 +1,7 @@
 package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentCancellation;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.catedra.domain.model.Hold;
@@ -9,6 +10,7 @@ import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.model.OccupancyStatus;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentListResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraCancellationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraOccupancyResponse;
@@ -31,6 +33,7 @@ class CatedraRestMapperTest {
         assertThat(catedraRestMapper.toDomainModel((CatedraHoldConfirmationResponse) null)).isNull();
         assertThat(catedraRestMapper.toDomainModel((CatedraAppointmentResponse) null)).isNull();
         assertThat(catedraRestMapper.toDomainModel((CatedraAppointmentListResponse) null)).isNull();
+        assertThat(catedraRestMapper.toDomainModel((CatedraCancellationResponse) null)).isNull();
     }
 
     @Test
@@ -87,5 +90,16 @@ class CatedraRestMapperTest {
                 "Gomez", LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), LocalTime.of(10, 0), "Juan", "Perez",
                 "+5492615551234", AppointmentStatus.CONFIRMED, Instant.parse("2026-09-10T14:35:00Z"),
                 Instant.parse("2026-09-10T14:36:00Z"), null, null));
+    }
+
+    @Test
+    void mapsEveryFieldOfACancellation() {
+        CatedraCancellationResponse response = new CatedraCancellationResponse(8251L, "process-a92b47d0",
+                AppointmentStatus.CANCELLED, Instant.parse("2026-09-11T15:10:00Z"));
+
+        AppointmentCancellation cancellation = catedraRestMapper.toDomainModel(response);
+
+        assertThat(cancellation).isEqualTo(new AppointmentCancellation(8251L, "process-a92b47d0",
+                Instant.parse("2026-09-11T15:10:00Z")));
     }
 }

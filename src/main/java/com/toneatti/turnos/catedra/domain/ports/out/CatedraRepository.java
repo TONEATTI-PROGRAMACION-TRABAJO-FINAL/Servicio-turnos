@@ -3,6 +3,7 @@ package com.toneatti.turnos.catedra.domain.ports.out;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentCancellation;
 import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.Hold;
@@ -52,5 +53,12 @@ public interface CatedraRepository {
      */
     AppointmentPage findAppointmentsPage(String externalPatientId, LocalDate from, LocalDate to,
                                          AppointmentStatus status, int page, int size);
+
+    /**
+     * Cancels the CONFIRMED reservation of the process (section 12); {@code reason} may be null. Cancelling a
+     * reservation already CANCELLED is idempotent and answers its current state. A
+     * {@link CatedraUnavailableException} does not prove that the reservation was not cancelled (section 18.4).
+     */
+    AppointmentCancellation cancelAppointment(String reservationProcessId, String reason);
 
 }
