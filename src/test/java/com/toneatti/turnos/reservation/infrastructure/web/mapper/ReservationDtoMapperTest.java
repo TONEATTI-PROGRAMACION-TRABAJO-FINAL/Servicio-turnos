@@ -1,13 +1,19 @@
 package com.toneatti.turnos.reservation.infrastructure.web.mapper;
 
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.ReservationStatus;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationPageResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationResponse;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationSummaryResponse;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,5 +56,42 @@ class ReservationDtoMapperTest {
                 LocalTime.of(9, 30), Instant.parse("2099-09-10T14:30:00Z"));
 
         assertThat(reservationDtoMapper.toResponse(process).getExpiresAt()).isNull();
+    }
+
+    @Test
+    void returnsNullForNullSummary() {
+        assertThat(reservationDtoMapper.toSummaryResponse(null)).isNull();
+    }
+
+    // Neither reservationId nor the patient's data are exposed; reservationProcessId is, since it cancels it (T10).
+    @Test
+    void mapsEveryFieldOfASummaryWithoutThePatient() {
+        AppointmentSummary summary = new AppointmentSummary(8251L, "process-a92b47d0", "user-42", 15L, "Ana",
+                "Gomez", LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), LocalTime.of(10, 0), "Juan", "Perez",
+                "+5492615551234", AppointmentStatus.CONFIRMED, Instant.parse("2026-09-10T14:35:00Z"),
+                Instant.parse("2026-09-10T14:36:00Z"), null, null);
+
+        ReservationSummaryResponse response = reservationDtoMapper.toSummaryResponse(summary);
+
+        assertThat(response).usingRecursiveComparison().isEqualTo(new ReservationSummaryResponse(
+                "process-a92b47d0", 15L, "Ana", "Gomez", "2026-09-14", "09:30", "10:00", "CONFIRMED",
+                "2026-09-10T14:35:00Z", "2026-09-10T14:36:00Z", null, null));
+    }
+
+    @Test
+    void mapsAPageWithItsPageAndSize() {
+        AppointmentSummary summary = new AppointmentSummary(8251L, "process-a92b47d0", "user-42", 15L, "Ana",
+                "Gomez", LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), LocalTime.of(10, 0), "Juan", "Perez",
+                "+5492615551234", AppointmentStatus.CONFIRMED, Instant.parse("2026-09-10T14:35:00Z"),
+                Instant.parse("2026-09-10T14:36:00Z"), null, null);
+        AppointmentPage page = new AppointmentPage(List.of(summary), 37);
+
+        ReservationPageResponse response = reservationDtoMapper.toPageResponse(page, 2, 20);
+
+        assertThat(response.getContent()).usingRecursiveFieldByFieldElementComparator()
+                .containsExactly(reservationDtoMapper.toSummaryResponse(summary));
+        assertThat(response.getTotalCount()).isEqualTo(37);
+        assertThat(response.getPage()).isEqualTo(2);
+        assertThat(response.getSize()).isEqualTo(20);
     }
 }

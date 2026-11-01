@@ -1,7 +1,10 @@
 package com.toneatti.turnos.reservation.infrastructure.web.controller;
 
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.reservation.application.exception.ConcurrentReservationUpdateException;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
+import com.toneatti.turnos.reservation.application.exception.InvalidDateRangeException;
 import com.toneatti.turnos.reservation.application.exception.InvalidPhoneNumberException;
 import com.toneatti.turnos.reservation.application.exception.PhoneNotRequestedException;
 import com.toneatti.turnos.reservation.application.exception.PhoneSubmissionUnavailableException;
@@ -17,12 +20,14 @@ import com.toneatti.turnos.reservation.application.exception.UnexpectedCatedraRe
 import com.toneatti.turnos.reservation.application.service.ReservationService;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.PhoneNumberRequest;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationPageResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationRequest;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.mapper.ReservationDtoMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -36,10 +41,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
+import java.time.LocalDate;
 
 import static com.toneatti.turnos.config.ProblemResponses.problem;
 
@@ -50,6 +57,7 @@ import static com.toneatti.turnos.config.ProblemResponses.problem;
 public class ReservationController {
 
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ReservationService reservationService;
     private final ReservationDtoMapper reservationDtoMapper;
@@ -91,6 +99,35 @@ public class ReservationController {
         } catch (UnexpectedCatedraRejectionException e) {
             log.error("Catedra rejected a reservation request it should have accepted", e);
             throw problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error");
+        }
+    }
+
+    // The reservations of the authenticated user as the cátedra has them (section 11): status, from and to are
+    // optional and combinable, page and size paginate. The patient is always the subject of the token.
+    @GetMapping
+    public ResponseEntity<ReservationPageResponse> listReservations(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) AppointmentStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw problem(HttpStatus.BAD_REQUEST, VALIDATION_ERROR,
+                    "page must be 0 or more and size between 1 and " + MAX_PAGE_SIZE);
+        }
+        try {
+            AppointmentPage result = reservationService.listReservations(jwt.getSubject(), from, to, status, page,
+                    size);
+            return ResponseEntity.ok(reservationDtoMapper.toPageResponse(result, page, size));
+        } catch (InvalidDateRangeException e) {
+            throw problem(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", e.getMessage());
+        } catch (ReservationUnavailableException e) {
+            // The cause stays in the log only: includes a configuration problem of the technical account
+            // (STUDENT_INTEGRATION_NOT_FOUND, section 13.1), which is not the user's to fix either.
+            log.warn("Could not list the reservations of the user", e);
+            throw problem(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
+                    "Reservations are temporarily unavailable");
         }
     }
 
