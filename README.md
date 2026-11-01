@@ -157,6 +157,38 @@ Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido l
 
 `GET /reservations/{id}` devuelve el mismo cuerpo. Solo encuentra los procesos del usuario: el de otro usuario responde `404` como si no existiera. No llama a la cátedra.
 
+`GET /reservations` devuelve, paginadas, las reservas del usuario autenticado tal como las tiene la cátedra (`GET /api/appointments`, sección 11 del contrato). El `externalPatientId` es siempre el `sub` del token; lo que mande la app en ese parámetro se ignora.
+
+Parámetros opcionales y combinables: `status` (`PHONE_PENDING`, `CONFIRMED`, `CANCELLED` o `FAILED`), `from`, `to` (`yyyy-MM-dd`), `page` (`0` por defecto) y `size` (`20` por defecto, hasta `100`).
+
+```json
+{
+  "content": [
+    {
+      "reservationProcessId": "process-a92b47d0",
+      "professionalId": 15,
+      "professionalFirstName": "Ana",
+      "professionalLastName": "Gomez",
+      "date": "2026-09-14",
+      "startTime": "09:30",
+      "endTime": "10:00",
+      "status": "CONFIRMED",
+      "createdAt": "2026-09-10T14:35:00Z",
+      "confirmedAt": "2026-09-10T14:36:00Z",
+      "cancelledAt": null,
+      "cancellationReason": null
+    }
+  ],
+  "totalCount": 37,
+  "page": 0,
+  "size": 20
+}
+```
+
+El listado sale de la cátedra, así que solo muestra los procesos que ya llegaron a `PHONE_PENDING` (la confirmación inicial del hold, sección 11 del contrato); los que todavía están en `PENDING_HOLD`, `HELD` o `CONFIRMING` no aparecen ahí, pero se siguen viendo con `GET /reservations/{id}` usando el `id` que devolvió el `POST /reservations` que los creó.
+
+`reservationProcessId` es el id con el que se cancela la reserva (`POST /api/appointments/{reservationProcessId}/cancel`, sección 12 del contrato); el `reservationId` numérico de la cátedra no se expone.
+
 `POST /reservations/{id}/phone` envía a la cátedra el teléfono que pidió (`AdditionalInformationRequested`). Solo se acepta mientras el proceso está en `WAITING_FOR_PHONE` y antes de su `expiresAt`.
 
 ```json
@@ -207,7 +239,8 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 
 | HTTP | `code` | Cuándo |
 | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | Falta un campo, el id no es positivo o una fecha u hora tiene otro formato |
+| `400` | `VALIDATION_ERROR` | Falta un campo, el id no es positivo, una fecha u hora tiene otro formato, o `GET /reservations` con `page` negativo o `size` fuera de 1 a 100 |
+| `400` | `INVALID_DATE_RANGE` | `GET /reservations` con `from` posterior a `to` |
 | `400` | `SLOT_IN_THE_PAST` | El slot ya empezó |
 | `400` | `PROFESSIONAL_DISABLED` | La cátedra rechazó el hold: profesional deshabilitado |
 | `400` | `INVALID_SLOT` | La cátedra rechazó el hold o la confirmación: el slot no está en la agenda |
@@ -224,7 +257,7 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 | `410` | `RESERVATION_EXPIRED` | Se envió un teléfono después del `expiresAt` del proceso. El estado lo cierra la cátedra con `AppointmentProcessExpired` |
 | `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
 | `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
-| `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT` |
+| `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT`. En `GET /reservations` también cubre que la cátedra no haya respondido |
 | `503` | `PHONE_SUBMISSION_UNAVAILABLE` | Kafka no confirmó el envío del teléfono dentro de `CATEDRA_KAFKA_SEND_TIMEOUT`. El proceso sigue esperando el teléfono y se puede enviar de nuevo |
 | `503` | `RESERVATION_PENDING` | La cátedra no respondió y no se sabe si la operación tuvo efecto; incluye `reservationId`. Repetir el mismo `POST` continúa ese proceso |
 
