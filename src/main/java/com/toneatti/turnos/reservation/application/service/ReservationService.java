@@ -1,5 +1,7 @@
 package com.toneatti.turnos.reservation.application.service;
 
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
 import com.toneatti.turnos.reservation.domain.model.AppointmentAction;
 import com.toneatti.turnos.reservation.domain.model.AppointmentActionOutcome;
@@ -7,6 +9,7 @@ import com.toneatti.turnos.reservation.domain.model.ReservationProcess;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
 import com.toneatti.turnos.reservation.domain.ports.in.ApplyAppointmentActionUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.GetReservationByIdUseCase;
+import com.toneatti.turnos.reservation.domain.ports.in.ListReservationsUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.StartReservationUseCase;
 import com.toneatti.turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +26,7 @@ public class ReservationService {
     private final GetReservationByIdUseCase getReservationByIdUseCase;
     private final ApplyAppointmentActionUseCase applyAppointmentActionUseCase;
     private final SubmitPhoneUseCase submitPhoneUseCase;
+    private final ListReservationsUseCase listReservationsUseCase;
 
     public StartedReservation startReservation(String userExternalId, Long professionalId, LocalDate date,
                                                LocalTime startTime) {
@@ -42,6 +46,11 @@ public class ReservationService {
 
     public AppointmentActionOutcome applyAppointmentAction(AppointmentAction action) {
         return applyAppointmentActionUseCase.applyAppointmentAction(action);
+    }
+
+    public AppointmentPage listReservations(String userExternalId, LocalDate from, LocalDate to,
+                                            AppointmentStatus status, int page, int size) {
+        return listReservationsUseCase.listReservations(userExternalId, from, to, status, page, size);
     }
 
     private static ReservationException reservationNotFound(Long id) {

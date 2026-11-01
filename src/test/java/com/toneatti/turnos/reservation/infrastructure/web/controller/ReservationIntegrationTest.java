@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.toneatti.turnos.support.ProblemAssertions.expectProblem;
@@ -435,6 +436,126 @@ class ReservationIntegrationTest {
     void answers401ToGetAReservationWithoutAUserToken() throws Exception {
         mockMvc.perform(get("/reservations/1"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listsTheReservationsOfTheAuthenticatedUserWithEveryFilter() throws Exception {
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, Map.of("X-Total-Count", "37"), """
+                [{"reservationId":8251,"reservationProcessId":"process-a92b47d0","externalPatientId":"%s",
+                  "professionalId":15,"professionalFirstName":"Ana","professionalLastName":"Gomez",
+                  "appointmentDate":"2026-09-14","startTime":"09:30:00","endTime":"10:00:00",
+                  "patientFirstName":"Juan","patientLastName":"Perez","patientPhone":"+5492615551234",
+                  "status":"CONFIRMED","createdAt":"2026-09-10T14:35:00Z","confirmedAt":"2026-09-10T14:36:00Z",
+                  "cancelledAt":null,"cancellationReason":null}]
+                """.formatted(userExternalId));
+
+        listReservations(userExternalId, "status=CONFIRMED&from=2026-09-01&to=2026-09-30&page=0&size=20")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(37))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.content[0].reservationProcessId").value("process-a92b47d0"))
+                .andExpect(jsonPath("$.content[0].professionalFirstName").value("Ana"))
+                .andExpect(jsonPath("$.content[0].professionalLastName").value("Gomez"))
+                .andExpect(jsonPath("$.content[0].startTime").value("09:30"))
+                .andExpect(jsonPath("$.content[0].endTime").value("10:00"))
+                .andExpect(jsonPath("$.content[0].status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.content[0].reservationId").doesNotExist())
+                .andExpect(content().string(not(containsString("+5492615551234"))));
+        assertThat(CATEDRA.lastRequestUri().getQuery()).isEqualTo("externalPatientId=" + userExternalId
+                + "&from=2026-09-01&to=2026-09-30&status=CONFIRMED&page=0&size=20");
+    }
+
+    @Test
+    void usesDefaultPagination() throws Exception {
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        listReservations(userExternalId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20));
+        assertThat(CATEDRA.lastRequestUri().getQuery())
+                .isEqualTo("externalPatientId=" + userExternalId + "&page=0&size=20");
+    }
+
+    // The core guarantee: whatever the app sends, the patient forwarded to the cátedra is always the JWT's subject.
+    @Test
+    void neverForwardsAnExternalPatientIdOtherThanTheAuthenticatedUsers() throws Exception {
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+
+        mockMvc.perform(get("/reservations").param("externalPatientId", "someone-else")
+                        .with(jwt().jwt(token -> token.subject(userExternalId))))
+                .andExpect(status().isOk());
+
+        assertThat(CATEDRA.lastRequestUri().getQuery())
+                .contains("externalPatientId=" + userExternalId)
+                .doesNotContain("someone-else");
+    }
+
+    // Two different users never share the patient forwarded to the cátedra.
+    @Test
+    void forwardsADifferentExternalPatientIdPerUser() throws Exception {
+        CATEDRA.respond(APPOINTMENTS_PATH, 200, "[]");
+        String otherUser = UUID.randomUUID().toString();
+
+        listReservations(userExternalId).andExpect(status().isOk());
+        assertThat(CATEDRA.lastRequestUri().getQuery()).contains("externalPatientId=" + userExternalId);
+
+        listReservations(otherUser).andExpect(status().isOk());
+        assertThat(CATEDRA.lastRequestUri().getQuery())
+                .contains("externalPatientId=" + otherUser)
+                .doesNotContain(userExternalId);
+    }
+
+    @Test
+    void answers400WhenFromIsAfterTo() throws Exception {
+        expectProblem(listReservations(userExternalId, "from=2026-09-30&to=2026-09-01"), 400, "INVALID_DATE_RANGE");
+        assertThat(CATEDRA.requestCount(APPOINTMENTS_PATH)).isZero();
+    }
+
+    @Test
+    void answers400WhenPageIsNegative() throws Exception {
+        expectProblem(listReservations(userExternalId, "page=-1"), 400, "VALIDATION_ERROR");
+        assertThat(CATEDRA.requestCount(APPOINTMENTS_PATH)).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "101"})
+    void answers400WhenSizeIsOutOfRange(int size) throws Exception {
+        expectProblem(listReservations(userExternalId, "size=" + size), 400, "VALIDATION_ERROR");
+        assertThat(CATEDRA.requestCount(APPOINTMENTS_PATH)).isZero();
+    }
+
+    // STUDENT_INTEGRATION_NOT_FOUND is a configuration problem of the technical account, not the user's: it
+    // surfaces as unavailable instead of a rejection (section 13.1), the same as T6.
+    @Test
+    void answers503WhenTheTechnicalIntegrationIsNotFound() throws Exception {
+        CATEDRA.respondProblem(APPOINTMENTS_PATH, 403, "STUDENT_INTEGRATION_NOT_FOUND");
+
+        expectProblem(listReservations(userExternalId), 503, "SERVICE_UNAVAILABLE")
+                .andExpect(content().string(not(containsString("STUDENT_INTEGRATION_NOT_FOUND"))));
+    }
+
+    @Test
+    void answers503WhenTheCatedraDoesNotAnswer() throws Exception {
+        CATEDRA.respondAfter(APPOINTMENTS_PATH, TIMEOUT, 200, "[]");
+
+        expectProblem(listReservations(userExternalId), 503, "SERVICE_UNAVAILABLE");
+    }
+
+    @Test
+    void answers401ToListReservationsWithoutAUserToken() throws Exception {
+        mockMvc.perform(get("/reservations"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions listReservations(String subject) throws Exception {
+        return mockMvc.perform(get("/reservations").with(jwt().jwt(token -> token.subject(subject))));
+    }
+
+    private ResultActions listReservations(String subject, String query) throws Exception {
+        return mockMvc.perform(get("/reservations?" + query).with(jwt().jwt(token -> token.subject(subject))));
     }
 
     private ResultActions getReservation(Long id, String subject) throws Exception {

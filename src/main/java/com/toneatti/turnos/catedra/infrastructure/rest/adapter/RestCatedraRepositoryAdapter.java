@@ -3,10 +3,14 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentListResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationRequest;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
@@ -19,11 +23,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.UriBuilder;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Arrays;
@@ -47,6 +54,7 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
     // A patient has a handful of reservations in a few days, so the first page is enough and the pagination headers
     // (X-Total-Count, Link) are not followed.
     private static final int APPOINTMENTS_PAGE_SIZE = 100;
+    private static final String TOTAL_COUNT_HEADER = "X-Total-Count";
 
     private final RestClient catedraRestClient;
     private final CatedraRestMapper catedraRestMapper;
@@ -111,6 +119,51 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
             return List.of();
         }
         return Arrays.stream(body).filter(Objects::nonNull).map(catedraRestMapper::toDomainModel).toList();
+    }
+
+    @Override
+    public AppointmentPage findAppointmentsPage(String externalPatientId, LocalDate from, LocalDate to,
+                                                AppointmentStatus status, int page, int size) {
+        ResponseEntity<CatedraAppointmentListResponse[]> response = call("GET " + APPOINTMENTS_PATH, () ->
+                catedraRestClient.get()
+                        .uri(uriBuilder -> appointmentsPageUri(uriBuilder, externalPatientId, from, to, status,
+                                page, size))
+                        .retrieve()
+                        .toEntity(CatedraAppointmentListResponse[].class));
+        CatedraAppointmentListResponse[] body = response.getBody();
+        List<AppointmentSummary> content = body == null ? List.of() :
+                Arrays.stream(body).filter(Objects::nonNull).map(catedraRestMapper::toDomainModel).toList();
+        return new AppointmentPage(content, totalCountOf(response, content.size()));
+    }
+
+    private static URI appointmentsPageUri(UriBuilder uriBuilder, String externalPatientId, LocalDate from,
+                                                     LocalDate to, AppointmentStatus status, int page, int size) {
+        UriBuilder builder = uriBuilder.path(APPOINTMENTS_PATH)
+                .queryParam("externalPatientId", externalPatientId);
+        if (from != null) {
+            builder = builder.queryParam("from", from);
+        }
+        if (to != null) {
+            builder = builder.queryParam("to", to);
+        }
+        if (status != null) {
+            builder = builder.queryParam("status", status);
+        }
+        return builder.queryParam("page", page).queryParam("size", size).build();
+    }
+
+    // The cátedra reports the total count independently of the page (section 11); a missing or unreadable header
+    // falls back to the size of this page, which is only wrong when there is more than one page.
+    private static long totalCountOf(ResponseEntity<?> response, int pageSize) {
+        String header = response.getHeaders().getFirst(TOTAL_COUNT_HEADER);
+        if (header == null) {
+            return pageSize;
+        }
+        try {
+            return Long.parseLong(header);
+        } catch (NumberFormatException e) {
+            return pageSize;
+        }
     }
 
     // A POST has effects in the cátedra. A success without a usable body cannot be used, and the effect may have
