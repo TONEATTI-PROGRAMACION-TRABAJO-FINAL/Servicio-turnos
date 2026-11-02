@@ -1,13 +1,18 @@
 package com.toneatti.turnos.reservation.infrastructure.web.controller;
 
+import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
+import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
+import com.toneatti.turnos.reservation.application.exception.CancellationPendingException;
 import com.toneatti.turnos.reservation.application.exception.ConcurrentReservationUpdateException;
 import com.toneatti.turnos.reservation.application.exception.HoldExpiredException;
+import com.toneatti.turnos.reservation.application.exception.InvalidDateRangeException;
 import com.toneatti.turnos.reservation.application.exception.InvalidPhoneNumberException;
 import com.toneatti.turnos.reservation.application.exception.PhoneNotRequestedException;
 import com.toneatti.turnos.reservation.application.exception.PhoneSubmissionUnavailableException;
 import com.toneatti.turnos.reservation.application.exception.ReservationException;
 import com.toneatti.turnos.reservation.application.exception.ReservationExpiredException;
 import com.toneatti.turnos.reservation.application.exception.ReservationInProgressException;
+import com.toneatti.turnos.reservation.application.exception.ReservationNotCancellableException;
 import com.toneatti.turnos.reservation.application.exception.ReservationNotWaitingForPhoneException;
 import com.toneatti.turnos.reservation.application.exception.ReservationPendingException;
 import com.toneatti.turnos.reservation.application.exception.ReservationRejectedException;
@@ -16,13 +21,16 @@ import com.toneatti.turnos.reservation.application.exception.SlotInThePastExcept
 import com.toneatti.turnos.reservation.application.exception.UnexpectedCatedraRejectionException;
 import com.toneatti.turnos.reservation.application.service.ReservationService;
 import com.toneatti.turnos.reservation.domain.model.StartedReservation;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.CancellationRequest;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.PhoneNumberRequest;
+import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationPageResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationRequest;
 import com.toneatti.turnos.reservation.infrastructure.web.dto.ReservationResponse;
 import com.toneatti.turnos.reservation.infrastructure.web.mapper.ReservationDtoMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -36,10 +44,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
+import java.time.LocalDate;
+
+import static com.toneatti.turnos.config.ProblemResponses.problem;
 
 @Slf4j
 @RestController
@@ -48,6 +60,7 @@ import java.net.URI;
 public class ReservationController {
 
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ReservationService reservationService;
     private final ReservationDtoMapper reservationDtoMapper;
@@ -83,12 +96,38 @@ public class ReservationController {
             pending.getBody().setProperty("reservationId", e.getId());
             throw pending;
         } catch (ReservationUnavailableException e) {
-            log.warn("Reservations are unavailable: check the technical integration of the catedra", e);
+            throw integrationUnavailable(e);
+        } catch (UnexpectedCatedraRejectionException e) {
+            throw unexpectedRejection(e);
+        }
+    }
+
+    // The reservations of the authenticated user as the cátedra has them (section 11): status, from and to are
+    // optional and combinable, page and size paginate. The patient is always the subject of the token.
+    @GetMapping
+    public ResponseEntity<ReservationPageResponse> listReservations(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) AppointmentStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw problem(HttpStatus.BAD_REQUEST, VALIDATION_ERROR,
+                    "page must be 0 or more and size between 1 and " + MAX_PAGE_SIZE);
+        }
+        try {
+            AppointmentPage result = reservationService.listReservations(jwt.getSubject(), from, to, status, page,
+                    size);
+            return ResponseEntity.ok(reservationDtoMapper.toPageResponse(result, page, size));
+        } catch (InvalidDateRangeException e) {
+            throw problem(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", e.getMessage());
+        } catch (ReservationUnavailableException e) {
+            // The cause stays in the log only: includes a configuration problem of the technical account
+            // (STUDENT_INTEGRATION_NOT_FOUND, section 13.1), which is not the user's to fix either.
+            log.warn("Could not list the reservations of the user", e);
             throw problem(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                     "Reservations are temporarily unavailable");
-        } catch (UnexpectedCatedraRejectionException e) {
-            log.error("Catedra rejected a reservation request it should have accepted", e);
-            throw problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error");
         }
     }
 
@@ -127,12 +166,40 @@ public class ReservationController {
         } catch (ReservationExpiredException e) {
             throw problem(HttpStatus.GONE, "RESERVATION_EXPIRED", "The reservation expired");
         } catch (ConcurrentReservationUpdateException e) {
-            throw problem(HttpStatus.CONFLICT, "RESERVATION_IN_PROGRESS",
-                    "The reservation changed meanwhile; check it and try again");
+            throw reservationChanged();
         } catch (PhoneSubmissionUnavailableException e) {
             // Already logged with its cause. The process keeps waiting for the phone, so it can be sent again.
             throw problem(HttpStatus.SERVICE_UNAVAILABLE, "PHONE_SUBMISSION_UNAVAILABLE",
                     "The phone number could not be sent; try again");
+        }
+    }
+
+    // The id is the reservationProcessId that GET /reservations lists, not the local id of GET /reservations/{id}:
+    // that listing comes from the cátedra, which does not know the local id. Another user's reservation answers 404
+    // as well, without calling the cátedra. Cancelling a cancelled reservation answers 200 with its current state.
+    @PostMapping("/{reservationProcessId}/cancel")
+    public ResponseEntity<ReservationResponse> cancelReservation(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String reservationProcessId,
+            @Valid @RequestBody(required = false) CancellationRequest request) {
+        String reason = request == null ? null : request.getReason();
+        try {
+            return ResponseEntity.ok(reservationDtoMapper.toResponse(
+                    reservationService.cancelReservation(jwt.getSubject(), reservationProcessId, reason)));
+        } catch (ReservationException e) {
+            throw reservationNotFound();
+        } catch (ReservationNotCancellableException e) {
+            throw problem(HttpStatus.CONFLICT, "RESERVATION_NOT_CANCELLABLE",
+                    "Only a confirmed reservation can be cancelled");
+        } catch (ConcurrentReservationUpdateException e) {
+            throw reservationChanged();
+        } catch (CancellationPendingException e) {
+            // Already logged with its cause. The reservation stays confirmed, and cancelling again is safe.
+            throw problem(HttpStatus.SERVICE_UNAVAILABLE, "CANCELLATION_PENDING",
+                    "The cancellation is not confirmed yet; try again later");
+        } catch (ReservationUnavailableException e) {
+            throw integrationUnavailable(e);
+        } catch (UnexpectedCatedraRejectionException e) {
+            throw unexpectedRejection(e);
         }
     }
 
@@ -159,14 +226,23 @@ public class ReservationController {
         };
     }
 
-    private static ResponseStatusException reservationNotFound() {
-        return problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
+    private static ResponseStatusException integrationUnavailable(ReservationUnavailableException e) {
+        log.warn("Reservations are unavailable: check the technical integration of the catedra", e);
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
+                "Reservations are temporarily unavailable");
     }
 
-    // Rendered as application/problem+json with a stable "code", the same convention as the cátedra (section 13).
-    private static ResponseStatusException problem(HttpStatus status, String code, String detail) {
-        ResponseStatusException exception = new ResponseStatusException(status, detail);
-        exception.getBody().setProperty("code", code);
-        return exception;
+    private static ResponseStatusException unexpectedRejection(UnexpectedCatedraRejectionException e) {
+        log.error("Catedra rejected a reservation request it should have accepted", e);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error");
+    }
+
+    private static ResponseStatusException reservationChanged() {
+        return problem(HttpStatus.CONFLICT, "RESERVATION_IN_PROGRESS",
+                "The reservation changed meanwhile; check it and try again");
+    }
+
+    private static ResponseStatusException reservationNotFound() {
+        return problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "Reservation not found");
     }
 }

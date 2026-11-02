@@ -83,6 +83,18 @@ class JpaReservationProcessRepositoryAdapterIntegrationTest {
     }
 
     @Test
+    void findsAProcessByTheReservationProcessIdOfTheCatedraOnlyForItsOwner() {
+        ReservationProcess process = adapter.create(started("user-42"));
+        process.markHeld("hold-6c0c2f41", "process-a92b47d0", EXPIRES_AT, NOW);
+        adapter.update(process.getId(), process);
+
+        assertThat(adapter.findByReservationProcessIdAndUserExternalId("process-a92b47d0", "user-42"))
+                .hasValueSatisfying(found -> assertThat(found.getId()).isEqualTo(process.getId()));
+        assertThat(adapter.findByReservationProcessIdAndUserExternalId("process-a92b47d0", "user-43")).isEmpty();
+        assertThat(adapter.findByReservationProcessIdAndUserExternalId("process-other", "user-42")).isEmpty();
+    }
+
+    @Test
     void rejectsASecondActiveProcessOfTheUserForTheSameSlot() {
         adapter.create(started("user-42"));
 

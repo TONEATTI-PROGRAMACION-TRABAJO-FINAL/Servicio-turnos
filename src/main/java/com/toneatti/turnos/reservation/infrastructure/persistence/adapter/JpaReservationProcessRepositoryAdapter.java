@@ -78,6 +78,14 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
     }
 
     @Override
+    public Optional<ReservationProcess> findByReservationProcessIdAndUserExternalId(String reservationProcessId,
+                                                                                   String userExternalId) {
+        return jpaReservationProcessRepository
+                .findByReservationProcessIdAndUserExternalId(reservationProcessId, userExternalId)
+                .map(reservationProcessMapper::toDomainModel);
+    }
+
+    @Override
     public Optional<ReservationProcess> findActiveByUserAndSlot(String userExternalId, Long professionalId,
                                                                 LocalDate date, LocalTime startTime) {
         return jpaReservationProcessRepository

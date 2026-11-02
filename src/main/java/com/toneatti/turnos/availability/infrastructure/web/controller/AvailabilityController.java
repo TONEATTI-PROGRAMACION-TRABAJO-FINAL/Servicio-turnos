@@ -17,10 +17,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
+
+import static com.toneatti.turnos.config.ProblemResponses.problem;
 
 @Slf4j
 @RestController
@@ -56,12 +57,5 @@ public class AvailabilityController {
             throw problem(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                     "Availability is temporarily unavailable");
         }
-    }
-
-    // Rendered as application/problem+json with a stable "code", the same convention as the cátedra (section 13).
-    private static ResponseStatusException problem(HttpStatus status, String code, String detail) {
-        ResponseStatusException exception = new ResponseStatusException(status, detail);
-        exception.getBody().setProperty("code", code);
-        return exception;
     }
 }
