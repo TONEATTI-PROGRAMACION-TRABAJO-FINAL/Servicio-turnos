@@ -3,6 +3,7 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentCancellation;
 import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
@@ -45,6 +46,12 @@ class RestCatedraRepositoryAdapterTest {
     private static final String HOLD_ID = "hold-6c0c2f41";
     private static final String CONFIRM_PATH = HOLDS_PATH + "/" + HOLD_ID + "/confirm";
     private static final String APPOINTMENTS_PATH = "/api/appointments";
+    private static final String PROCESS_ID = "process-a92b47d0";
+    private static final String CANCEL_PATH = APPOINTMENTS_PATH + "/" + PROCESS_ID + "/cancel";
+    private static final String CANCELLED = """
+            {"reservationId":8251,"reservationProcessId":"process-a92b47d0","status":"CANCELLED",
+             "cancelledAt":"2026-09-11T15:10:00Z"}
+            """;
     private static final LocalDate DAY = LocalDate.of(2026, 9, 14);
     private static final LocalTime NINE_THIRTY = LocalTime.of(9, 30);
     private static final String PATIENT = "user-42";
@@ -507,6 +514,67 @@ class RestCatedraRepositoryAdapterTest {
                 .isInstanceOf(CatedraUnavailableException.class);
     }
 
+    @Test
+    void cancelsAnAppointmentWithAReason() {
+        catedra.respond(CANCEL_PATH, 200, CANCELLED);
+
+        assertThat(adapter.cancelAppointment(PROCESS_ID, "Cambio solicitado por el usuario")).isEqualTo(
+                new AppointmentCancellation(8251L, PROCESS_ID, Instant.parse("2026-09-11T15:10:00Z")));
+        assertThat(catedra.lastRequestUri().getPath()).isEqualTo(CANCEL_PATH);
+        assertThat(catedra.lastRequestBody()).isEqualTo("""
+                {"reason":"Cambio solicitado por el usuario"}""");
+        assertThat(catedra.lastRequestHeader(HttpHeaders.CONTENT_TYPE)).isEqualTo("application/json");
+    }
+
+    @Test
+    void cancelsAnAppointmentWithoutAReason() {
+        catedra.respond(CANCEL_PATH, 200, CANCELLED);
+
+        assertThat(adapter.cancelAppointment(PROCESS_ID, null).reservationProcessId()).isEqualTo(PROCESS_ID);
+        assertThat(catedra.lastRequestBody()).isEqualTo("{}");
+    }
+
+    // Every code of section 13.1 that cancelling a reservation can answer.
+    @ParameterizedTest
+    @CsvSource({
+            "400, VALIDATION_ERROR",
+            "403, STUDENT_INTEGRATION_NOT_FOUND",
+            "404, RESERVATION_NOT_FOUND",
+            "403, RESERVATION_OWNER_MISMATCH",
+            "409, RESERVATION_NOT_CANCELLABLE"
+    })
+    void failsAsRejectedWithEachCodeOfCancellingAnAppointment(int status, String code) {
+        catedra.respondProblem(CANCEL_PATH, status, code);
+
+        assertRejectedWith(assertThatCancellingAnAppointmentFails(), status, code,
+                "POST " + APPOINTMENTS_PATH + "/{reservationProcessId}/cancel");
+    }
+
+    @Test
+    void failsAsUnavailableWhenCancellingAnAppointmentTakesLongerThanTheReadTimeout() {
+        catedra.respondAfter(CANCEL_PATH, READ_TIMEOUT.multipliedBy(4), 200, CANCELLED);
+
+        assertThatCancellingAnAppointmentFails()
+                .isInstanceOf(CatedraUnavailableException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class);
+        // The request reached the cátedra: the reservation may be cancelled even though the call failed.
+        assertThat(catedra.requestCount(CANCEL_PATH)).isEqualTo(1);
+    }
+
+    @Test
+    void failsAsUnavailableWhenAnAppointmentIsCancelledWithoutABody() {
+        catedra.respond(CANCEL_PATH, 200, "");
+
+        assertUnusableBody(assertThatCancellingAnAppointmentFails());
+    }
+
+    @Test
+    void failsAsUnavailableWhenACancellationDoesNotSayCancelled() {
+        catedra.respond(CANCEL_PATH, 200, "{\"reservationProcessId\":\"process-a92b47d0\",\"status\":\"CONFIRMED\"}");
+
+        assertUnusableBody(assertThatCancellingAnAppointmentFails());
+    }
+
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheAppointmentsOfADayFails() {
         return assertThatThrownBy(() -> adapter.findAppointments(PATIENT, DAY, DAY));
     }
@@ -535,6 +603,10 @@ class RestCatedraRepositoryAdapterTest {
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatConfirmingAHoldFails() {
         return assertThatThrownBy(() -> adapter.confirmHold(HOLD_ID, PATIENT, "Juan", "Perez"));
+    }
+
+    private AbstractThrowableAssert<?, ? extends Throwable> assertThatCancellingAnAppointmentFails() {
+        return assertThatThrownBy(() -> adapter.cancelAppointment(PROCESS_ID, null));
     }
 
     private AbstractThrowableAssert<?, ? extends Throwable> assertThatFindingTheOccupanciesOfADayFails() {

@@ -16,6 +16,9 @@ public class CatedraRequestRejectedException extends RuntimeException {
     public static final String HOLD_NOT_FOUND = "HOLD_NOT_FOUND";
     public static final String HOLD_EXPIRED = "HOLD_EXPIRED";
     public static final String RESERVATION_PROCESS_ALREADY_CONFIRMED = "RESERVATION_PROCESS_ALREADY_CONFIRMED";
+    public static final String RESERVATION_NOT_FOUND = "RESERVATION_NOT_FOUND";
+    public static final String RESERVATION_OWNER_MISMATCH = "RESERVATION_OWNER_MISMATCH";
+    public static final String RESERVATION_NOT_CANCELLABLE = "RESERVATION_NOT_CANCELLABLE";
 
     private final int status;
     private final String code;

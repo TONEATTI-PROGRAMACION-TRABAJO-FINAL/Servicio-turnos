@@ -1,11 +1,13 @@
 package com.toneatti.turnos.catedra.infrastructure.rest.mapper;
 
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentCancellation;
 import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
 import com.toneatti.turnos.catedra.domain.model.Hold;
 import com.toneatti.turnos.catedra.domain.model.HoldConfirmation;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentListResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraCancellationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldResponse;
@@ -43,6 +45,16 @@ public class CatedraRestMapper {
         return new HoldConfirmation(
                 response.reservationProcessId(),
                 response.expiresAt());
+    }
+
+    public AppointmentCancellation toDomainModel(CatedraCancellationResponse response) {
+        if (response == null) {
+            return null;
+        }
+        return new AppointmentCancellation(
+                response.reservationId(),
+                response.reservationProcessId(),
+                response.cancelledAt());
     }
 
     public Appointment toDomainModel(CatedraAppointmentResponse response) {

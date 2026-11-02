@@ -15,6 +15,9 @@ public interface JpaReservationProcessRepository extends JpaRepository<Reservati
 
     Optional<ReservationProcessEntity> findByReservationProcessId(String reservationProcessId);
 
+    Optional<ReservationProcessEntity> findByReservationProcessIdAndUserExternalId(String reservationProcessId,
+                                                                                  String userExternalId);
+
     Optional<ReservationProcessEntity> findByUserExternalIdAndProfessionalIdAndDateAndStartTimeAndActiveTrue(
             String userExternalId, Long professionalId, LocalDate date, LocalTime startTime);
 

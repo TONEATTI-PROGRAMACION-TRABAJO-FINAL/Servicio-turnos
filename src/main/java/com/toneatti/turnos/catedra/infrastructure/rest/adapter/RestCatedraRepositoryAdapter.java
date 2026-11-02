@@ -3,6 +3,7 @@ package com.toneatti.turnos.catedra.infrastructure.rest.adapter;
 import com.toneatti.turnos.catedra.domain.exception.CatedraRequestRejectedException;
 import com.toneatti.turnos.catedra.domain.exception.CatedraUnavailableException;
 import com.toneatti.turnos.catedra.domain.model.Appointment;
+import com.toneatti.turnos.catedra.domain.model.AppointmentCancellation;
 import com.toneatti.turnos.catedra.domain.model.AppointmentPage;
 import com.toneatti.turnos.catedra.domain.model.AppointmentStatus;
 import com.toneatti.turnos.catedra.domain.model.AppointmentSummary;
@@ -12,6 +13,8 @@ import com.toneatti.turnos.catedra.domain.model.Occupancy;
 import com.toneatti.turnos.catedra.domain.ports.out.CatedraRepository;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentListResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraAppointmentResponse;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraCancellationRequest;
+import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraCancellationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationRequest;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldConfirmationResponse;
 import com.toneatti.turnos.catedra.infrastructure.rest.dto.CatedraHoldRequest;
@@ -51,6 +54,7 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
     private static final String HOLDS_PATH = "/api/appointment-holds";
     private static final String CONFIRM_HOLD_PATH = HOLDS_PATH + "/{holdId}/confirm";
     private static final String APPOINTMENTS_PATH = "/api/appointments";
+    private static final String CANCEL_APPOINTMENT_PATH = APPOINTMENTS_PATH + "/{reservationProcessId}/cancel";
     // A patient has a handful of reservations in a few days, so the first page is enough and the pagination headers
     // (X-Total-Count, Link) are not followed.
     private static final int APPOINTMENTS_PAGE_SIZE = 100;
@@ -99,6 +103,17 @@ public class RestCatedraRepositoryAdapter implements CatedraRepository {
                 new CatedraHoldConfirmationRequest(externalPatientId, patientFirstName, patientLastName),
                 CatedraHoldConfirmationResponse.class, confirmation -> confirmation.reservationProcessId() != null,
                 holdId);
+        return catedraRestMapper.toDomainModel(body);
+    }
+
+    // A 200 that does not say CANCELLED cannot be trusted either way, so it fails as unavailable and the caller
+    // reconciles.
+    @Override
+    public AppointmentCancellation cancelAppointment(String reservationProcessId, String reason) {
+        CatedraCancellationResponse body = post(CANCEL_APPOINTMENT_PATH, new CatedraCancellationRequest(reason),
+                CatedraCancellationResponse.class, cancellation -> cancellation.reservationProcessId() != null
+                        && cancellation.status() == AppointmentStatus.CANCELLED,
+                reservationProcessId);
         return catedraRestMapper.toDomainModel(body);
     }
 

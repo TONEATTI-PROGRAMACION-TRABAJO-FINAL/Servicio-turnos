@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.CANCELLATION;
 import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.CONFIRMATION;
 import static com.toneatti.turnos.reservation.domain.model.AppointmentActionFixtures.PROCESS_ID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,6 +90,22 @@ class ApplyAppointmentActionUseCaseImplIntegrationTest {
 
         assertThat(storedStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
         assertThat(jpaProcessedAppointmentActionRepository.count()).isEqualTo(1);
+    }
+
+    // The user cancelled through REST before the event of that cancellation arrived: the event changes nothing,
+    // and its redelivery is recognized as a duplicate.
+    @Test
+    void ignoresTheCancellationEventOfAReservationAlreadyCancelledThroughRest() {
+        useCase.applyAppointmentAction(CONFIRMATION);
+        ReservationProcess process = reservationProcessRepository.findByReservationProcessId(PROCESS_ID).orElseThrow();
+        process.markCancelled("Cambio solicitado por el usuario", NOW);
+        reservationProcessRepository.update(process.getId(), process);
+
+        assertThat(useCase.applyAppointmentAction(CANCELLATION)).isEqualTo(AppointmentActionOutcome.LATE);
+        assertThat(useCase.applyAppointmentAction(CANCELLATION)).isEqualTo(AppointmentActionOutcome.DUPLICATE);
+
+        assertThat(storedStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(jpaProcessedAppointmentActionRepository.count()).isEqualTo(2);
     }
 
     private ReservationStatus storedStatus() {
