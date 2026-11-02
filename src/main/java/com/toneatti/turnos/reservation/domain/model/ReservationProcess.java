@@ -172,9 +172,16 @@ public class ReservationProcess {
         if (!status.canTransitionTo(ReservationStatus.CANCELLED)) {
             return false;
         }
-        moveTo(ReservationStatus.CANCELLED, now);
-        this.cancellationReason = cancelled.reason();
+        markCancelled(cancelled.reason(), now);
         return true;
+    }
+
+    /**
+     * The cátedra cancelled the confirmed reservation at the request of the user; {@code reason} may be null.
+     */
+    public void markCancelled(String reason, Instant now) {
+        moveTo(ReservationStatus.CANCELLED, now);
+        this.cancellationReason = reason;
     }
 
     private void updateExpiresAt(Instant expiresAt) {

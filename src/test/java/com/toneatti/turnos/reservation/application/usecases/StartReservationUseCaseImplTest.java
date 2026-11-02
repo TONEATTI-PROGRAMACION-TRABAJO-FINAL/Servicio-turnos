@@ -497,6 +497,12 @@ class StartReservationUseCaseImplTest {
         }
 
         @Override
+        public Optional<ReservationProcess> findByReservationProcessIdAndUserExternalId(String reservationProcessId,
+                                                                                       String userExternalId) {
+            throw new UnsupportedOperationException("Starting a reservation never looks it up by the catedra id");
+        }
+
+        @Override
         public Optional<ReservationProcess> findActiveByUserAndSlot(String userExternalId, Long professionalId,
                                                                     LocalDate date, LocalTime startTime) {
             return byId.values().stream().filter(ReservationProcess::isActive).findFirst();

@@ -239,6 +239,27 @@ class ReservationProcessTest {
         assertThat(process.isActive()).isFalse();
     }
 
+    @Test
+    void marksAConfirmedReservationCancelledAtTheRequestOfTheUser() {
+        ReservationProcess process = processIn(CONFIRMED);
+
+        process.markCancelled(null, LATER);
+
+        assertThat(process.getStatus()).isEqualTo(CANCELLED);
+        assertThat(process.getCancellationReason()).isNull();
+        assertThat(process.getUpdatedAt()).isEqualTo(LATER);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = "CONFIRMED", mode = EnumSource.Mode.EXCLUDE)
+    void cannotBeMarkedCancelledUnlessConfirmed(ReservationStatus status) {
+        ReservationProcess process = processIn(status);
+
+        assertThatThrownBy(() -> process.markCancelled("Cambio solicitado por el usuario", LATER))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(process).usingRecursiveComparison().isEqualTo(processIn(status));
+    }
+
     // Section 18.3: a late event cannot reopen a final status nor move a confirmed reservation back, and an event
     // that the status does not expect yet changes nothing either.
     @ParameterizedTest
