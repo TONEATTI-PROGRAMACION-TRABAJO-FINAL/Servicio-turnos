@@ -129,6 +129,8 @@ El paciente es siempre el usuario del JWT: el `externalPatientId` es su `externa
 
 Todos requieren `Authorization: Bearer <jwt-de-usuario>`; sin un token válido la respuesta es `401`.
 
+**Qué id va en `/reservations/{...}`.** `GET /reservations/{id}` y `POST /reservations/{id}/phone` usan el `id` **local** (numérico) que devuelve `POST /reservations`. La cancelación, `POST /reservations/{reservationProcessId}/cancel`, usa en cambio el `reservationProcessId` de la cátedra (por ejemplo `process-a92b47d0`), que es el que expone `GET /reservations`: ese listado sale de la cátedra, que no conoce el id local.
+
 `POST /reservations`
 
 ```json
@@ -187,7 +189,7 @@ Parámetros opcionales y combinables: `status` (`PHONE_PENDING`, `CONFIRMED`, `C
 
 El listado sale de la cátedra, así que solo muestra los procesos que ya llegaron a `PHONE_PENDING` (la confirmación inicial del hold, sección 11 del contrato); los que todavía están en `PENDING_HOLD`, `HELD` o `CONFIRMING` no aparecen ahí, pero se siguen viendo con `GET /reservations/{id}` usando el `id` que devolvió el `POST /reservations` que los creó.
 
-`reservationProcessId` es el id con el que se cancela la reserva (`POST /api/appointments/{reservationProcessId}/cancel`, sección 12 del contrato); el `reservationId` numérico de la cátedra no se expone.
+`reservationProcessId` es el id con el que se cancela la reserva (`POST /reservations/{reservationProcessId}/cancel`, más abajo); el `reservationId` numérico de la cátedra no se expone.
 
 `POST /reservations/{id}/phone` envía a la cátedra el teléfono que pidió (`AdditionalInformationRequested`). Solo se acepta mientras el proceso está en `WAITING_FOR_PHONE` y antes de su `expiresAt`.
 
@@ -199,6 +201,18 @@ Se quitan espacios, guiones, paréntesis y puntos, y lo que queda tiene que cump
 
 El teléfono **no se guarda**: es un dato personal y solo viaja en el evento a la cátedra. Tampoco aparece en los logs.
 
+`POST /reservations/{reservationProcessId}/cancel` cancela una reserva del usuario en la cátedra (`POST /api/appointments/{reservationProcessId}/cancel`, sección 12 del contrato). El cuerpo es opcional; `reason` admite hasta 500 caracteres y, vacío o en blanco, no se envía.
+
+```json
+{ "reason": "Cambio solicitado por el usuario" }
+```
+
+Responde `200 OK` con el mismo cuerpo que `GET /reservations/{id}`, en `CANCELLED` y con su `cancellationReason`.
+
+- **Dueño.** Antes de llamar a la cátedra se busca el proceso local con ese `reservationProcessId` y el `sub` del token. Si no existe o es de otro usuario, responde `404 RESERVATION_NOT_FOUND` sin llamar a la cátedra, así no se revela que existe (la cátedra lista las reservas de toda la cuenta técnica, sección 11).
+- **Estados.** Solo se cancela una reserva `CONFIRMED`, como exige la cátedra. En cualquier otro estado, incluido `WAITING_FOR_PHONE`, responde `409 RESERVATION_NOT_CANCELLABLE` sin llamar a la cátedra. Si el `AppointmentConfirmed` todavía no llegó, la app puede reintentar en unos segundos.
+- **Idempotencia.** Si ya está `CANCELLED` (por una cancelación anterior o por el evento `AppointmentCancelled`), responde `200` con su estado actual, el `cancellationReason` original incluido, y no vuelve a llamar a la cátedra. Si la cátedra contesta que ya estaba cancelada, se toma como éxito.
+
 El resultado del proceso según la cátedra, `null` cuando no corresponde:
 
 | Campo | Cuándo tiene valor |
@@ -207,7 +221,7 @@ El resultado del proceso según la cátedra, `null` cuando no corresponde:
 | `phoneRejectionReason` | La cátedra rechazó el último teléfono (`AdditionalInformationRejected`, por ejemplo `INVALID_PHONE_NUMBER`). Mientras el estado siga en `WAITING_FOR_PHONE`, la app puede pedir otro hasta `expiresAt` |
 | `cancellationReason` | `CANCELLED`, si la cancelación tuvo motivo |
 
-Los ids de la cátedra (`holdId`, `reservationProcessId`, el `requestEventId` del pedido de teléfono y el `reservationId` de la reserva confirmada) se guardan pero no se exponen.
+Los ids de la cátedra (`holdId`, `reservationProcessId`, el `requestEventId` del pedido de teléfono y el `reservationId` de la reserva confirmada) se guardan pero no se exponen en este cuerpo. El `reservationProcessId` sí aparece en `GET /reservations`, porque es el id para cancelar.
 
 ### Estados
 
@@ -225,7 +239,7 @@ PENDING_HOLD ──▶ HELD ──▶ CONFIRMING ──▶ WAITING_FOR_PHONE ─
 | `CONFIRMING` | Se pidió la confirmación y todavía no se sabe si llegó |
 | `WAITING_FOR_PHONE` | La cátedra confirmó el hold y espera el teléfono antes de `expiresAt`. Un teléfono rechazado no cambia el estado: se puede enviar otro hasta `expiresAt` |
 | `CONFIRMED` | La cátedra confirmó la reserva (`AppointmentConfirmed`) |
-| `CANCELLED` | La reserva confirmada se canceló (`AppointmentCancelled`) |
+| `CANCELLED` | La reserva confirmada se canceló, con `POST /reservations/{reservationProcessId}/cancel` o por el evento `AppointmentCancelled` |
 | `FAILED` | La cátedra rechazó el hold o la confirmación, o informó el proceso como inválido (`AppointmentProcessInvalid`); se guarda su `code` o `reason` |
 | `EXPIRED` | El hold o el proceso vencieron (`AppointmentProcessExpired`, con su `reason`) |
 
@@ -239,7 +253,7 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 
 | HTTP | `code` | Cuándo |
 | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | Falta un campo, el id no es positivo, una fecha u hora tiene otro formato, o `GET /reservations` con `page` negativo o `size` fuera de 1 a 100 |
+| `400` | `VALIDATION_ERROR` | Falta un campo, el id no es positivo, una fecha u hora tiene otro formato, `GET /reservations` con `page` negativo o `size` fuera de 1 a 100, o una cancelación con `reason` de más de 500 caracteres |
 | `400` | `INVALID_DATE_RANGE` | `GET /reservations` con `from` posterior a `to` |
 | `400` | `SLOT_IN_THE_PAST` | El slot ya empezó |
 | `400` | `PROFESSIONAL_DISABLED` | La cátedra rechazó el hold: profesional deshabilitado |
@@ -247,18 +261,20 @@ Todos en `application/problem+json` con un `code` estable, la misma convención 
 | `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no conoce al profesional |
 | `404` | `USER_NOT_FOUND` | El usuario del token ya no existe |
 | `400` | `INVALID_PHONE_NUMBER` | El teléfono, sin separadores, no tiene entre 7 y 15 dígitos con un `+` opcional al principio. No se envía |
-| `404` | `RESERVATION_NOT_FOUND` | `GET` o envío del teléfono de un proceso inexistente o de otro usuario |
+| `404` | `RESERVATION_NOT_FOUND` | `GET`, envío del teléfono o cancelación de un proceso inexistente o de otro usuario |
 | `409` | `SLOT_ALREADY_RESERVED` | El slot ya tiene una reserva confirmada |
 | `409` | `SLOT_ALREADY_HELD` | El slot tiene un hold activo de otro proceso |
-| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento. Si lo que cambió el proceso fue un evento de la cátedra que lo dejó en `WAITING_FOR_PHONE` o `CONFIRMED`, no hay conflicto: se devuelve ese proceso |
+| `409` | `RESERVATION_IN_PROGRESS` | Otro request del mismo usuario está reservando ese slot en este momento, o el proceso cambió mientras se enviaba el teléfono o se cancelaba. Si lo que cambió el proceso fue un evento de la cátedra que lo dejó en `WAITING_FOR_PHONE` o `CONFIRMED` (al reservar) o en `CANCELLED` (al cancelar), no hay conflicto: se devuelve ese proceso |
 | `409` | `RESERVATION_NOT_WAITING_FOR_PHONE` | Se envió un teléfono a un proceso que no está en `WAITING_FOR_PHONE` |
+| `409` | `RESERVATION_NOT_CANCELLABLE` | Se pidió cancelar un proceso que no está `CONFIRMED` ni `CANCELLED`, o la cátedra lo rechazó con ese mismo código. El estado local no cambia |
 | `409` | `PHONE_NOT_REQUESTED_YET` | El proceso está en `WAITING_FOR_PHONE` pero todavía no llegó el `AdditionalInformationRequested`, cuyo `eventId` hace falta para enviar el teléfono. Reintentar en unos segundos |
 | `410` | `HOLD_EXPIRED` | El hold venció antes de confirmarse |
 | `410` | `RESERVATION_EXPIRED` | Se envió un teléfono después del `expiresAt` del proceso. El estado lo cierra la cátedra con `AppointmentProcessExpired` |
 | `410` | `HOLD_NOT_FOUND` | La cátedra ya no encuentra el hold |
-| `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`); queda en el log como error |
+| `500` | `INTERNAL_ERROR` | La cátedra rechazó algo que este servicio nunca debería mandar (`VALIDATION_ERROR`, `HOLD_OWNER_MISMATCH`, `EXTERNAL_PATIENT_MISMATCH`, o `RESERVATION_NOT_FOUND` y `RESERVATION_OWNER_MISMATCH` al cancelar una reserva que localmente es del usuario); queda en el log como error |
 | `503` | `SERVICE_UNAVAILABLE` | La cátedra no encuentra la integración técnica (`STUDENT_INTEGRATION_NOT_FOUND`): hay que revisar `CATEDRA_JWT`. En `GET /reservations` también cubre que la cátedra no haya respondido |
 | `503` | `PHONE_SUBMISSION_UNAVAILABLE` | Kafka no confirmó el envío del teléfono dentro de `CATEDRA_KAFKA_SEND_TIMEOUT`. El proceso sigue esperando el teléfono y se puede enviar de nuevo |
+| `503` | `CANCELLATION_PENDING` | La cátedra no respondió la cancelación y no se pudo confirmar si llegó. La reserva sigue `CONFIRMED` localmente; repetir el mismo `POST` es seguro |
 | `503` | `RESERVATION_PENDING` | La cátedra no respondió y no se sabe si la operación tuvo efecto; incluye `reservationId`. Repetir el mismo `POST` continúa ese proceso |
 
 `RESERVATION_PROCESS_ALREADY_CONFIRMED` no llega a la app: significa que una confirmación anterior del mismo proceso sí llegó, y se trata como éxito.
@@ -269,6 +285,7 @@ Un timeout, un `5xx` o una respuesta ilegible no prueban que la operación haya 
 
 - **Hold sin respuesta.** El contrato no permite leer un hold, así que se consultan las ocupaciones del slot (`GET /api/appointment-occupancies`). Si el slot está libre, el hold no se creó y se pide de nuevo. Si está `CONFIRMED`, el proceso falla con `SLOT_ALREADY_RESERVED`. Si está `HELD`, **no se puede saber si el hold es nuestro o de otro**: pedirlo otra vez respondería `SLOT_ALREADY_HELD` en ambos casos. El proceso queda en `PENDING_HOLD` y la app recibe `RESERVATION_PENDING`; cuando la cátedra libere ese hold (en su `expiresAt`), un nuevo `POST` lo pide de nuevo. Esta es una limitación del contrato, no del servicio.
 - **Confirmación sin respuesta.** Se buscan las reservas del paciente para ese día (`GET /api/appointments`). Si aparece el `reservationProcessId` del proceso, la confirmación llegó y no se repite. Si no aparece, se confirma una vez más; si la primera llegó entretanto, la cátedra responde `RESERVATION_PROCESS_ALREADY_CONFIRMED` y se toma como éxito.
+- **Cancelación sin respuesta.** Se buscan las reservas del paciente para ese día (`GET /api/appointments`). Si la reserva aparece `CANCELLED`, la cancelación llegó: se marca localmente y no se repite. Si aparece `CONFIRMED`, se cancela una vez más; aunque la primera hubiera llegado entretanto, la cátedra responde con el estado actual de una reserva ya cancelada, así que nunca se cancela dos veces. Si no aparece o la consulta falla, la app recibe `CANCELLATION_PENDING` y la reserva sigue `CONFIRMED`: si la cancelación sí llegó, el evento `AppointmentCancelled` la cierra.
 
 Los timeouts del cliente REST de la cátedra son `PT2S` de conexión y `PT5S` de lectura por defecto; `CATEDRA_CONNECT_TIMEOUT` y `CATEDRA_READ_TIMEOUT` los cambian (duración ISO-8601).
 
@@ -277,7 +294,7 @@ Los timeouts del cliente REST de la cátedra son `PT2S` de conexión y `PT5S` de
 Después de la confirmación, el proceso avanza con los eventos que la cátedra publica en `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` (secciones 15.4 y 15.6 a 15.10 del contrato): `AdditionalInformationRequested` guarda su `eventId` como `requestEventId` (lo necesita el envío del teléfono), y los demás llevan el proceso a los estados de la tabla de arriba.
 
 - **Al menos una vez.** El offset se confirma recién después de procesar cada mensaje, nunca automáticamente. Cada `eventId` procesado se guarda en `processed_appointment_actions` (con restricción única), en la misma transacción que el cambio del proceso: un mensaje repetido se reconoce y no repite efectos (sección 18.1).
-- **Eventos tardíos.** Un evento que el estado actual no admite (por ejemplo, una confirmación sobre un proceso `EXPIRED`) se registra y se ignora: no reabre un estado final ni hace retroceder una reserva confirmada (sección 18.3).
+- **Eventos tardíos.** Un evento que el estado actual no admite (por ejemplo, una confirmación sobre un proceso `EXPIRED`) se registra y se ignora: no reabre un estado final ni hace retroceder una reserva confirmada (sección 18.3). Es lo que pasa con el `AppointmentCancelled` de una cancelación hecha por `POST /reservations/{reservationProcessId}/cancel`, que suele llegar después de la respuesta: el proceso ya está `CANCELLED`. Si en cambio el evento llega antes de que el request guarde, el request encuentra el proceso ya cancelado y lo devuelve.
 - **Proceso desconocido.** Un evento de un `reservationProcessId` que no existe localmente se registra y se ignora.
 - **Mensaje ilegible.** JSON inválido, sin `eventId`, `eventType` o `reservationProcessId`, con un `eventType` desconocido o con un `schemaVersion` distinto de `1`: se deja en el log (`WARN`, con partición y offset) y se saltea, sin reintentar. Los campos desconocidos se ignoran.
 - **Error al procesar.** Si falla aplicar un evento legible (por ejemplo, la base no responde o otro request cambió el proceso), el mensaje se reintenta en el lugar con espera exponencial (1 s, 2 s, 4 s… hasta 30 s entre intentos) durante `CATEDRA_KAFKA_RETRY_MAX_ELAPSED_TIME` (2 minutos por defecto). Mientras tanto la partición espera.
