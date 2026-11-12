@@ -1,0 +1,28 @@
+# Local PostgreSQL for Servicio-catalogo and Servicio-turnos: one database and one user per service.
+# The credentials are read from the .env next to this file (see .env.example); there are no defaults.
+# The scripts in docker/postgres/init run only when the volume is empty: to change the credentials, recreate it
+# with docker compose down -v.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      CATALOGO_DB_USERNAME: ${CATALOGO_DB_USERNAME:?Set CATALOGO_DB_USERNAME in .env}
+      CATALOGO_DB_PASSWORD: ${CATALOGO_DB_PASSWORD:?Set CATALOGO_DB_PASSWORD in .env}
+      TURNOS_DB_USERNAME: ${TURNOS_DB_USERNAME:?Set TURNOS_DB_USERNAME in .env}
+      TURNOS_DB_PASSWORD: ${TURNOS_DB_PASSWORD:?Set TURNOS_DB_PASSWORD in .env}
+    ports:
+      # Only reachable from this machine.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Since the postgres 18 image the data lives under /var/lib/postgresql/18/docker.
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

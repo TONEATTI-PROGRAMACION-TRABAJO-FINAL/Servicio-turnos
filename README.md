@@ -30,10 +30,33 @@ El servicio se integra con el servicio central de la cátedra (REST y Kafka) y c
 | `CATALOGO_BASE_URL` | `catalogo.base-url` | URL base de Servicio-catalogo |
 | `USER_JWT_SECRET` | `user.jwt.secret` | Secreto propio para firmar los JWT de los usuarios (HS256, mínimo 32 bytes). Se genera, por ejemplo, con `openssl rand -base64 48` |
 | `USER_JWT_EXPIRATION` | `user.jwt.expiration` | Opcional. Vigencia del JWT de usuario en formato ISO-8601; por defecto `PT24H` |
+| `TURNOS_DB_URL` | `spring.datasource.url` | URL JDBC de la base PostgreSQL del servicio. Con la base local: `jdbc:postgresql://localhost:5432/turnos` |
+| `TURNOS_DB_USERNAME` | `spring.datasource.username` | Usuario de esa base. Con la base local, el que crea `compose.yaml` |
+| `TURNOS_DB_PASSWORD` | `spring.datasource.password` | Contraseña de ese usuario |
 
 Los campos `integration.*` los devuelven `POST /api/student/register`, `POST /api/authenticate` y `GET /api/student/integration`.
 
-Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes.
+Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `USER_JWT_SECRET` tiene menos de 32 bytes), la aplicación no arranca y muestra `APPLICATION FAILED TO START` con la lista de propiedades faltantes. Las tres `TURNOS_DB_*` no entran en esa lista: si faltan, el arranque falla al crear la conexión a la base.
+
+### Base de datos local
+
+La base es PostgreSQL. El esquema lo crean las migraciones de Flyway (`src/main/resources/db/migration`) al arrancar el servicio, y Hibernate solo lo valida (`ddl-auto=validate`).
+
+`compose.yaml` levanta un PostgreSQL 18 local para Servicio-catalogo y Servicio-turnos: crea las bases `catalogo` y `turnos`, cada una con su propio usuario como dueño. Cada usuario solo puede conectarse a su propia base: el script de inicialización le quita a `PUBLIC` los permisos `CONNECT` y `TEMPORARY` sobre las dos. Además de las `TURNOS_DB_*`, lee del mismo `.env`:
+
+| Variable | De dónde sale |
+| --- | --- |
+| `POSTGRES_PASSWORD` | Contraseña del superusuario `postgres` del contenedor, a elección |
+| `CATALOGO_DB_USERNAME` | Usuario de la base `catalogo`, a elección. Es el que va a usar Servicio-catalogo |
+| `CATALOGO_DB_PASSWORD` | Contraseña de ese usuario, a elección |
+
+Todas son obligatorias: si falta alguna, `docker compose` no arranca y dice cuál.
+
+```bash
+docker compose up -d postgres
+```
+
+El puerto `5432` solo se publica en `127.0.0.1`. Los datos quedan en el volumen `postgres-data` y sobreviven a los reinicios. El script de `docker/postgres/init` corre solo la primera vez, con el volumen vacío: para cambiar usuarios o contraseñas hay que borrar el volumen (y con él los datos) con `docker compose down -v`.
 
 ### Pasos
 
@@ -41,18 +64,24 @@ Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `U
    ```bash
    cp .env.example .env
    ```
-2. Cargar las variables en la terminal y levantar el servicio:
+2. Levantar la base local (ver la sección anterior):
+   ```bash
+   docker compose up -d postgres
+   ```
+3. Cargar las variables en la terminal y levantar el servicio:
    ```bash
    set -a; source .env; set +a
    ./mvnw spring-boot:run
    ```
    En IntelliJ también se pueden cargar desde *Run Configuration → Environment variables*.
 
-El archivo `.env` contiene secretos (JWT técnico y secreto del JWT de usuario): **nunca se commitea**, ni se pega en capturas, issues o logs.
+El archivo `.env` contiene secretos (JWT técnico, secreto del JWT de usuario y contraseñas de la base): **nunca se commitea**, ni se pega en capturas, issues o logs.
 
 ### Tests
 
-Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions. El consumidor Kafka queda detenido en los tests, salvo en su test de integración, que lo prueba contra un broker embebido (`@EmbeddedKafka`): no hace falta Docker ni el entorno de la cátedra.
+Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions. El consumidor Kafka queda detenido en los tests, salvo en su test de integración, que lo prueba contra un broker embebido (`@EmbeddedKafka`): no hace falta el entorno de la cátedra.
+
+La base de los tests es H2 en memoria en modo PostgreSQL, sobre la que corren las mismas migraciones de Flyway. `PostgresSchemaIntegrationTest` además las aplica sobre un PostgreSQL 18 real con Testcontainers y verifica que Hibernate valide el esquema; necesita Docker y, si no está disponible, se saltea.
 
 ## Contraseñas
 
@@ -70,7 +99,7 @@ Cada hash tarda unos 30 ms. El hash guardado incluye sus parámetros (`$argon2id
 
 Al registrarse, la contraseña debe tener entre 8 y 128 caracteres; el login también rechaza más de 128. El máximo solo evita que contraseñas enormes encarezcan cada hash. Si no se cumple, la respuesta es un `400` en `application/problem+json`.
 
-La base es H2 en memoria, así que no hay hashes BCrypt viejos que migrar: al reiniciar, todos los usuarios se registran de nuevo con Argon2id.
+No hay hashes BCrypt viejos que migrar: Argon2id se adoptó cuando la base todavía era H2 en memoria, antes de que los usuarios se guardaran en PostgreSQL.
 
 ## Catálogo
 

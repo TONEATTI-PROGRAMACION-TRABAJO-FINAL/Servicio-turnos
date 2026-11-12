@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Against the H2 schema Hibernate generates, so the unique constraint on the eventId is the real one.
+ * Against the schema of the Flyway migrations on H2, so the unique constraint on the eventId is the real one.
  */
 @SpringBootTest
 @ActiveProfiles("test")
