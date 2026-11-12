@@ -45,13 +45,10 @@ public class SecurityConfig {
                 // so a browser cannot attach them to a forged cross-site request.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // The H2 console renders inside frames.
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/users", "/users/login").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/h2-console/**").permitAll()
                         .anyRequest().authenticated())
                 // Every other endpoint needs the user JWT as a Bearer token; without a valid one Spring answers 401.
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
