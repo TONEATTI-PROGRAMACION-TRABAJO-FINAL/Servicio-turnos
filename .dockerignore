@@ -1,0 +1,10 @@
+# Only what the build needs; everything else (.env, target/, .git/, IDE files...) stays out of the context.
+*
+!mvnw
+!.mvn/
+!pom.xml
+!src/
+# Excluded explicitly too, in case the allowlist above changes.
+.env
+target/
+.git/
