@@ -42,13 +42,13 @@ Todas son obligatorias salvo las marcadas como opcionales. Si falta alguna (o `U
 
 La base es PostgreSQL. El esquema lo crean las migraciones de Flyway (`src/main/resources/db/migration`) al arrancar el servicio, y Hibernate solo lo valida (`ddl-auto=validate`).
 
-`compose.yaml` levanta un PostgreSQL 18 local para Servicio-catalogo y Servicio-turnos: crea las bases `catalogo` y `turnos`, cada una con su propio usuario como dueño. Cada usuario solo puede conectarse a su propia base: el script de inicialización le quita a `PUBLIC` los permisos `CONNECT` y `TEMPORARY` sobre las dos. Además de las `TURNOS_DB_*`, lee del mismo `.env`:
+El servicio `postgres` de `compose.yaml` es un PostgreSQL 18 local para Servicio-catalogo y Servicio-turnos: crea las bases `catalogo` y `turnos`, cada una con su propio usuario como dueño. Cada usuario solo puede conectarse a su propia base: el script de inicialización le quita a `PUBLIC` los permisos `CONNECT` y `TEMPORARY` sobre las dos. Además de las `TURNOS_DB_*`, lee del mismo `.env`:
 
 | Variable | De dónde sale |
 | --- | --- |
 | `POSTGRES_PASSWORD` | Contraseña del superusuario `postgres` del contenedor, a elección |
-| `CATALOGO_DB_USERNAME` | Usuario de la base `catalogo`, a elección. Es el que va a usar Servicio-catalogo |
-| `CATALOGO_DB_PASSWORD` | Contraseña de ese usuario, a elección |
+| `CATALOGO_DB_USERNAME` | Usuario de la base `catalogo`, a elección. Es el que va a usar Servicio-catalogo: tiene que coincidir con el del `.env` de ese repo |
+| `CATALOGO_DB_PASSWORD` | Contraseña de ese usuario, a elección. También tiene que coincidir con la del `.env` de Servicio-catalogo |
 
 Todas son obligatorias: si falta alguna, `docker compose` no arranca y dice cuál.
 
@@ -59,6 +59,8 @@ docker compose up -d postgres
 El puerto `5432` solo se publica en `127.0.0.1`. Los datos quedan en el volumen `postgres-data` y sobreviven a los reinicios. El script de `docker/postgres/init` corre solo la primera vez, con el volumen vacío: para cambiar usuarios o contraseñas hay que borrar el volumen (y con él los datos) con `docker compose down -v`.
 
 ### Pasos
+
+Para desarrollar, solo la base corre en Docker y el servicio se levanta con Maven o desde el IDE, con las URLs de `localhost` del `.env`.
 
 1. Copiar el archivo de ejemplo y completar los valores reales:
    ```bash
@@ -77,11 +79,59 @@ El puerto `5432` solo se publica en `127.0.0.1`. Los datos quedan en el volumen 
 
 El archivo `.env` contiene secretos (JWT técnico, secreto del JWT de usuario y contraseñas de la base): **nunca se commitea**, ni se pega en capturas, issues o logs.
 
+### Levantar todo con Docker Compose
+
+`compose.yaml` también levanta los dos servicios, cada uno en su contenedor: `catalogo` se construye desde `../Servicio-catalogo` y `turnos` desde este repo. Requisitos:
+
+- Los dos repos clonados uno al lado del otro:
+  ```
+  .../Servicio-catalogo
+  .../Servicio-turnos
+  ```
+- `build: ../Servicio-catalogo` construye la rama que esté activa en ese repo, y esa rama tiene que tener el `Dockerfile` (`develop`, una vez mergeado su PR).
+- Cada repo con su `.env` completo (ver el `.env.example` de cada uno). Las `CATALOGO_DB_USERNAME` y `CATALOGO_DB_PASSWORD` tienen que coincidir en los dos: el `.env` de este repo crea el usuario de la base `catalogo` y el del catálogo es el que lo usa.
+- ZeroTier conectado en el host: los contenedores llegan a la API, el Redis y el Kafka de la cátedra a través de la red del host.
+
+Desde este repo:
+
+```bash
+docker compose up -d --build
+```
+
+`--build` reconstruye las imágenes con el código actual de los dos repos. `docker compose logs -f turnos catalogo` muestra los logs y `docker compose down` baja todo (sin `-v`, los datos de la base se conservan).
+
+Dentro del compose, `localhost` es el propio contenedor, así que `compose.yaml` pisa las variables del `.env` que apuntan a otros contenedores:
+
+| Servicio | Variable | Valor en el compose |
+| --- | --- | --- |
+| `catalogo` | `CATALOGO_DB_URL` | `jdbc:postgresql://postgres:5432/catalogo` |
+| `catalogo` | `CATALOGO_SERVER_PORT` | `8081`, para que otro valor en el `.env` no rompa la URL de abajo ni el puerto publicado |
+| `turnos` | `TURNOS_DB_URL` | `jdbc:postgresql://postgres:5432/turnos` |
+| `turnos` | `CATALOGO_BASE_URL` | `http://catalogo:8081` |
+
+Además, `turnos` recibe `POSTGRES_PASSWORD` y `CATALOGO_DB_PASSWORD` vacías: están en su `.env` solo para crear la base, y así ese contenedor no recibe credenciales que no usa. El servicio `postgres` las sigue tomando del `.env`.
+
+Los servicios se publican solo en `127.0.0.1`: catálogo en `8081` y turnos en `8080`. Los dos esperan a que la base esté sana; turnos además espera a que arranque el catálogo, aunque no lo llama hasta la primera request.
+
+Compose lee los `.env` con `env_file`, no con `source`: los valores no pasan por el shell. Las comillas se quitan igual, pero un valor con espacios sin comillas se toma entero, y un `$` se interpola salvo entre comillas simples. Si un valor funciona con `source`, tiene que funcionar acá sin espacios sueltos ni `$` fuera de comillas simples.
+
 ### Tests
 
 Los tests no necesitan las variables reales. `src/test/resources/application-test.properties` define valores ficticios y el test de contexto activa el perfil `test`, así que `./mvnw clean verify` funciona igual en local y en GitHub Actions. El consumidor Kafka queda detenido en los tests, salvo en su test de integración, que lo prueba contra un broker embebido (`@EmbeddedKafka`): no hace falta el entorno de la cátedra.
 
 La base de los tests es H2 en memoria en modo PostgreSQL, sobre la que corren las mismas migraciones de Flyway. `PostgresSchemaIntegrationTest` además las aplica sobre un PostgreSQL 18 real con Testcontainers y verifica que Hibernate valide el esquema; necesita Docker y, si no está disponible, se saltea.
+
+### Imagen Docker
+
+El `Dockerfile` construye la imagen en dos etapas: la primera compila el jar con `./mvnw` sobre un JDK 25, sin correr los tests (los corre GitHub Actions), y la final tiene solo el JRE 25 y `app.jar`. Para construirla a mano:
+
+```bash
+docker build -t servicio-turnos:local .
+```
+
+El `.dockerignore` deja entrar al contexto de build solo `mvnw`, `.mvn/`, `pom.xml` y `src/`: el `.env`, `target/` y `.git/` nunca llegan a la imagen.
+
+La imagen no trae configuración ni secretos: todo se pasa por variables de entorno, las mismas de la tabla de [Variables](#variables). Corre con el usuario no root `turnos` y escucha en el puerto `8080`. Dentro del contenedor la JVM queda en UTC: los horarios de los turnos usan un reloj en `TURNOS_TIME_ZONE` (opcional, por defecto `America/Argentina/Buenos_Aires`), así que lo único que cambia es que los timestamps del log salen en UTC.
 
 ## Contraseñas
 
