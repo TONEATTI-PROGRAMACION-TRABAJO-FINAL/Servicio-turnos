@@ -1,5 +1,8 @@
-# Local PostgreSQL for Servicio-catalogo and Servicio-turnos: one database and one user per service.
-# The credentials are read from the .env next to this file (see .env.example); there are no defaults.
+# Servicio-catalogo, Servicio-turnos and their PostgreSQL. The repos must be cloned side by side: catalogo is built
+# from ../Servicio-catalogo. Each service reads its own .env (see .env.example in each repo); the URLs that point
+# to other containers are fixed below, since inside the compose network localhost is the container itself.
+# docker compose up -d postgres starts only the database, to run the services from the IDE or with Maven.
+# The credentials of postgres are interpolated from the .env next to this file; there are no defaults.
 # The scripts in docker/postgres/init run only when the volume is empty: to change the credentials, recreate it
 # with docker compose down -v.
 services:
@@ -23,6 +26,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  catalogo:
+    # Builds the branch checked out in ../Servicio-catalogo, which must have the Dockerfile.
+    build: ../Servicio-catalogo
+    env_file: ../Servicio-catalogo/.env
+    environment:
+      CATALOGO_DB_URL: jdbc:postgresql://postgres:5432/catalogo
+      # Fixed so that another value in the .env cannot break CATALOGO_BASE_URL of turnos nor the published port.
+      CATALOGO_SERVER_PORT: "8081"
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  turnos:
+    build: .
+    env_file: .env
+    environment:
+      TURNOS_DB_URL: jdbc:postgresql://postgres:5432/turnos
+      CATALOGO_BASE_URL: http://catalogo:8081
+      # The .env also holds these credentials for the postgres service above (interpolated, not read from here).
+      # Emptied so this container does not receive credentials it does not use. "" and not a bare key: a bare
+      # key would take the value from the shell that runs docker compose.
+      POSTGRES_PASSWORD: ""
+      CATALOGO_DB_PASSWORD: ""
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # service_started: catalogo has no healthcheck, and turnos calls it on each request, not at startup.
+      catalogo:
+        condition: service_started
 
 volumes:
   postgres-data:
