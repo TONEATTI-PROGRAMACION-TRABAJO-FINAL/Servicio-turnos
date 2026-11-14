@@ -13,22 +13,22 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
 
+import static com.toneatti.turnos.reservation.infrastructure.persistence.adapter.ReservationProcessAdapterFixtures.DAY;
+import static com.toneatti.turnos.reservation.infrastructure.persistence.adapter.ReservationProcessAdapterFixtures.NINE_THIRTY;
+import static com.toneatti.turnos.reservation.infrastructure.persistence.adapter.ReservationProcessAdapterFixtures.NOW;
+import static com.toneatti.turnos.reservation.infrastructure.persistence.adapter.ReservationProcessAdapterFixtures.finish;
+import static com.toneatti.turnos.reservation.infrastructure.persistence.adapter.ReservationProcessAdapterFixtures.started;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Against the H2 schema Hibernate generates, so the unique constraint and the optimistic lock are the real ones.
+ * Against the schema of the Flyway migrations on H2, so the unique constraint and the optimistic lock are the real ones.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 class JpaReservationProcessRepositoryAdapterIntegrationTest {
 
-    private static final LocalDate DAY = LocalDate.of(2099, 9, 14);
-    private static final LocalTime NINE_THIRTY = LocalTime.of(9, 30);
-    private static final Instant NOW = Instant.parse("2099-09-10T14:30:00Z");
     private static final Instant EXPIRES_AT = Instant.parse("2099-09-10T14:44:50Z");
 
     @Autowired
@@ -111,8 +111,8 @@ class JpaReservationProcessRepositoryAdapterIntegrationTest {
 
     @Test
     void allowsANewProcessOnceTheOthersOfTheSlotFinished() {
-        finish(adapter.create(started("user-42")));
-        finish(adapter.create(started("user-42")));
+        finish(adapter, adapter.create(started("user-42")));
+        finish(adapter, adapter.create(started("user-42")));
 
         assertThat(adapter.create(started("user-42")).getId()).isNotNull();
         assertThat(adapter.findActiveByUserAndSlot("user-42", 15L, DAY, NINE_THIRTY)).isPresent();
@@ -162,14 +162,5 @@ class JpaReservationProcessRepositoryAdapterIntegrationTest {
                 .isInstanceOf(ConcurrentReservationUpdateException.class);
         assertThat(jpaReservationProcessRepository.findById(created.getId()).orElseThrow().getStatus())
                 .isEqualTo(ReservationStatus.HELD);
-    }
-
-    private void finish(ReservationProcess process) {
-        process.markFailed("SLOT_ALREADY_HELD", NOW);
-        adapter.update(process.getId(), process);
-    }
-
-    private static ReservationProcess started(String userExternalId) {
-        return ReservationProcess.start(userExternalId, 15L, DAY, NINE_THIRTY, NOW);
     }
 }
