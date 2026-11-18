@@ -3,7 +3,7 @@
 
 > Documento **generado automáticamente** por la cátedra de Programación II (UM): RepoSense + análisis de calidad de **7 dimensiones**. **No editar a mano**: se regenera en cada evaluación.
 > Rama evaluada: `main`. Análisis **heurístico** (regex + métricas) + build: es una criba para orientar la revisión, **no una nota**. La **documentación** del repositorio no se evalúa.
-> Generado: 2026-11-17.
+> Generado: 2026-11-18.
 
 ## 1. Veredicto
 
@@ -102,103 +102,139 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 ## 5. Señales detectadas
 
-El análisis encontró las siguientes señales (archivo, sin número de línea a propósito):
+El análisis encontró las siguientes señales, con el archivo y la línea donde se originan cuando están disponibles:
 
-**SRP/responsabilidad** (29)
-- clase 'CatedraRestMapper' grande (LOC=74, métodos=11, campos=0) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/mapper/CatedraRestMapper.java`
-- clase 'RestCatedraRepositoryAdapter' grande (LOC=169, métodos=16, campos=9) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java`
-- clase 'RestCatedraRepositoryAdapter' con baja cohesión (9%) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java`
-- clase 'CatedraRequestRejectedException' grande (LOC=28, métodos=3, campos=15) — `src/main/java/com/toneatti/turnos/catedra/domain/exception/CatedraRequestRejectedException.java`
-- método 'AppointmentActionMessageMapper.toDomain' con complejidad 9 — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java`
-- clase 'ReservationProcessEntity' grande (LOC=41, métodos=0, campos=18) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/persistence/entity/ReservationProcessEntity.java`
-- clase 'ReservationController' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java`
-- clase 'ReservationResponse' grande (LOC=12, métodos=0, campos=10) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/dto/ReservationResponse.java`
-- clase 'ReservationSummaryResponse' grande (LOC=14, métodos=0, campos=12) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/dto/ReservationSummaryResponse.java`
-- clase 'ReservationService' con baja cohesión (19%) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java`
-- clase 'ApplyAppointmentActionUseCaseImpl' con baja cohesión (10%) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ApplyAppointmentActionUseCaseImpl.java`
-- clase 'CancelReservationUseCaseImpl' con baja cohesión (20%) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java`
-- método 'CancelReservationUseCaseImpl.findByReservationProcessIdAndUserExternalId' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java`
-- método 'CancelReservationUseCaseImpl.cancel' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java`
-- clase 'StartReservationUseCaseImpl' grande (LOC=197, métodos=13, campos=7) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- clase 'StartReservationUseCaseImpl' con baja cohesión (47%) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- método 'StartReservationUseCaseImpl.resume' con complejidad 6 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- método 'StartReservationUseCaseImpl.filter' con complejidad 6 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- método 'StartReservationUseCaseImpl.startTime' con complejidad 6 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- método 'StartReservationUseCaseImpl.confirm' de 36 líneas — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- método 'StartReservationUseCaseImpl.confirm' con complejidad 9 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- clase 'ReservationProcess' grande (LOC=219, métodos=34, campos=17) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java`
-- clase 'ReservationProcess' con baja cohesión (11%) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java`
-- método 'ReservationProcess.apply' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java`
-- método 'ReservationStatus.nextStatuses' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationStatus.java`
-- clase 'GetAvailableSlotsUseCaseImpl' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java`
-- método 'GetAvailableSlotsUseCaseImpl.generateSlots' con complejidad 6 — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java`
-- clase 'SecurityConfig' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/config/SecurityConfig.java`
-- clase 'UserService' con baja cohesión (33%) — `src/main/java/com/toneatti/turnos/user/application/service/UserService.java`
+**Archivos con más señales**
 
-**DIP/concretos** (46)
-- clase 'CatedraRestMapper' muy acoplada (CBO=12) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/mapper/CatedraRestMapper.java`
-- clase 'CatedraRestMapper' instancia 6 concretos (CBO=12) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/mapper/CatedraRestMapper.java`
-- clase 'RestCatedraRepositoryAdapter' muy acoplada (CBO=53) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java`
-- clase 'RestCatedraRepositoryAdapter' instancia 8 concretos (CBO=53) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java`
-- clase 'CatedraRepository' muy acoplada (CBO=20) — `src/main/java/com/toneatti/turnos/catedra/domain/ports/out/CatedraRepository.java`
-- clase 'AppointmentActionListener' muy acoplada (CBO=11) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/listener/AppointmentActionListener.java`
-- clase 'AppointmentActionMessageMapper' muy acoplada (CBO=12) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java`
-- clase 'AppointmentActionMessageMapper' instancia 9 concretos (CBO=12) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java`
-- clase 'KafkaPhoneSubmissionPublisherAdapter' muy acoplada (CBO=14) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/adapter/KafkaPhoneSubmissionPublisherAdapter.java`
-- clase 'PhoneSubmissionKafkaConfig' muy acoplada (CBO=18) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/config/PhoneSubmissionKafkaConfig.java`
-- clase 'AppointmentActionsKafkaConfig' muy acoplada (CBO=23) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/config/AppointmentActionsKafkaConfig.java`
-- clase 'JpaReservationProcessRepositoryAdapter' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/persistence/adapter/JpaReservationProcessRepositoryAdapter.java`
-- clase 'ReservationProcessEntity' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/persistence/entity/ReservationProcessEntity.java`
-- clase 'ReservationController' muy acoplada (CBO=83) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java`
-- clase 'ReservationDtoMapper' muy acoplada (CBO=13) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/mapper/ReservationDtoMapper.java`
-- clase 'ReservationService' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java`
-- clase 'ReservationService' instancia 3 concretos (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java`
-- clase 'ApplyAppointmentActionUseCaseImpl' muy acoplada (CBO=17) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ApplyAppointmentActionUseCaseImpl.java`
-- clase 'ListReservationsUseCaseImpl' muy acoplada (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ListReservationsUseCaseImpl.java`
-- clase 'ListReservationsUseCaseImpl' instancia 4 concretos (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ListReservationsUseCaseImpl.java`
-- clase 'CancelReservationUseCaseImpl' muy acoplada (CBO=30) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java`
-- clase 'CancelReservationUseCaseImpl' instancia 8 concretos (CBO=30) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java`
-- clase 'StartReservationUseCaseImpl' muy acoplada (CBO=61) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- clase 'StartReservationUseCaseImpl' instancia 15 concretos (CBO=61) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java`
-- clase 'GetReservationByIdUseCaseImpl' muy acoplada (CBO=11) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/GetReservationByIdUseCaseImpl.java`
-- clase 'SubmitPhoneUseCaseImpl' muy acoplada (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/SubmitPhoneUseCaseImpl.java`
-- clase 'SubmitPhoneUseCaseImpl' instancia 4 concretos (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/SubmitPhoneUseCaseImpl.java`
-- clase 'ReservationProcess' muy acoplada (CBO=24) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java`
-- clase 'ReservationProcess' instancia 3 concretos (CBO=24) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java`
-- clase 'ReservationStatus' muy acoplada (CBO=9) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationStatus.java`
-- clase 'AvailabilityController' muy acoplada (CBO=30) — `src/main/java/com/toneatti/turnos/availability/infrastructure/web/controller/AvailabilityController.java`
-- clase 'GetAvailableSlotsUseCaseImpl' muy acoplada (CBO=29) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java`
-- clase 'GetAvailableSlotsUseCaseImpl' instancia 7 concretos (CBO=29) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java`
-- clase 'CatedraIntegrationProperties' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java`
-- clase 'SecurityConfig' muy acoplada (CBO=38) — `src/main/java/com/toneatti/turnos/config/SecurityConfig.java`
-- clase 'JwtAccessTokenIssuerAdapter' muy acoplada (CBO=14) — `src/main/java/com/toneatti/turnos/user/infrastructure/security/JwtAccessTokenIssuerAdapter.java`
-- clase 'JpaUserRepositoryAdapter' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/infrastructure/persistence/adapter/JpaUserRepositoryAdapter.java`
-- clase 'UserController' muy acoplada (CBO=25) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/controller/UserController.java`
-- clase 'UserController' instancia 3 concretos (CBO=25) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/controller/UserController.java`
-- clase 'UserDtoMapper' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/mapper/UserDtoMapper.java`
-- clase 'UserService' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/service/UserService.java`
-- clase 'RegisterUserUseCaseImpl' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/usecases/RegisterUserUseCaseImpl.java`
-- clase 'LoginUserUseCaseImpl' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/usecases/LoginUserUseCaseImpl.java`
-- clase 'RestCatalogoRepositoryAdapter' muy acoplada (CBO=19) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/adapter/RestCatalogoRepositoryAdapter.java`
-- clase 'ProfessionalCategoryController' muy acoplada (CBO=13) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/web/controller/ProfessionalCategoryController.java`
-- clase 'ProfessionalController' muy acoplada (CBO=17) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/web/controller/ProfessionalController.java`
+| Archivo | Señales |
+|---|---:|
+| `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java` | 8 |
+| `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java` | 7 |
+| `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java` | 7 |
+| `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java` | 6 |
+| `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java` | 4 |
+| `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java` | 4 |
+| `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java` | 4 |
+| `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java` | 4 |
+| `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java` | 3 |
+| `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java` | 3 |
+
+**DIP/concretos** (47)
+- clase 'GetAvailableSlotsUseCaseImpl' muy acoplada (CBO=29) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java:38`
+- clase 'GetAvailableSlotsUseCaseImpl' instancia 7 concretos (CBO=29) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java:38`
+- clase 'AvailabilityController' muy acoplada (CBO=30) — `src/main/java/com/toneatti/turnos/availability/infrastructure/web/controller/AvailabilityController.java:30`
+- clase 'RestCatalogoRepositoryAdapter' muy acoplada (CBO=19) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/adapter/RestCatalogoRepositoryAdapter.java:29`
+- clase 'ProfessionalCategoryController' muy acoplada (CBO=13) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/web/controller/ProfessionalCategoryController.java:23`
+- clase 'ProfessionalController' muy acoplada (CBO=17) — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/web/controller/ProfessionalController.java:26`
+- clase 'CatedraRepository' muy acoplada (CBO=20) — `src/main/java/com/toneatti/turnos/catedra/domain/ports/out/CatedraRepository.java:22`
+- clase 'RestCatedraRepositoryAdapter' muy acoplada (CBO=53) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:51`
+- clase 'RestCatedraRepositoryAdapter' instancia 8 concretos (CBO=53) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:51`
+- clase 'CatedraRestMapper' muy acoplada (CBO=12) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/mapper/CatedraRestMapper.java:18`
+- clase 'CatedraRestMapper' instancia 6 concretos (CBO=12) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/mapper/CatedraRestMapper.java:18`
+- clase 'CatedraIntegrationProperties' muy acoplada (CBO=9) — `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java:23`
+- clase 'SecurityConfig' muy acoplada (CBO=38) — `src/main/java/com/toneatti/turnos/config/SecurityConfig.java:31`
+- clase 'UserJwtProperties' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/config/UserJwtProperties.java:19`
+- clase 'ReservationService' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java:24`
+- clase 'ReservationService' instancia 3 concretos (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java:24`
+- clase 'ApplyAppointmentActionUseCaseImpl' muy acoplada (CBO=17) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ApplyAppointmentActionUseCaseImpl.java:28`
+- clase 'CancelReservationUseCaseImpl' muy acoplada (CBO=30) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java:40`
+- clase 'CancelReservationUseCaseImpl' instancia 8 concretos (CBO=30) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java:40`
+- clase 'GetReservationByIdUseCaseImpl' muy acoplada (CBO=11) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/GetReservationByIdUseCaseImpl.java:20`
+- clase 'ListReservationsUseCaseImpl' muy acoplada (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ListReservationsUseCaseImpl.java:23`
+- clase 'ListReservationsUseCaseImpl' instancia 4 concretos (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ListReservationsUseCaseImpl.java:23`
+- clase 'StartReservationUseCaseImpl' muy acoplada (CBO=61) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:64`
+- clase 'StartReservationUseCaseImpl' instancia 15 concretos (CBO=61) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:64`
+- clase 'SubmitPhoneUseCaseImpl' muy acoplada (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/SubmitPhoneUseCaseImpl.java:33`
+- clase 'SubmitPhoneUseCaseImpl' instancia 4 concretos (CBO=15) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/SubmitPhoneUseCaseImpl.java:33`
+- clase 'ReservationProcess' muy acoplada (CBO=24) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:24`
+- clase 'ReservationProcess' instancia 3 concretos (CBO=24) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:24`
+- clase 'ReservationStatus' muy acoplada (CBO=9) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationStatus.java:18`
+- clase 'KafkaPhoneSubmissionPublisherAdapter' muy acoplada (CBO=14) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/adapter/KafkaPhoneSubmissionPublisherAdapter.java:28`
+- clase 'AppointmentActionsKafkaConfig' muy acoplada (CBO=23) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/config/AppointmentActionsKafkaConfig.java:28`
+- clase 'PhoneSubmissionKafkaConfig' muy acoplada (CBO=18) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/config/PhoneSubmissionKafkaConfig.java:25`
+- clase 'AppointmentActionListener' muy acoplada (CBO=11) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/listener/AppointmentActionListener.java:24`
+- clase 'AppointmentActionMessageMapper' muy acoplada (CBO=12) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java:19`
+- clase 'AppointmentActionMessageMapper' instancia 9 concretos (CBO=12) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java:19`
+- clase 'JpaReservationProcessRepositoryAdapter' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/persistence/adapter/JpaReservationProcessRepositoryAdapter.java:22`
+- clase 'ReservationProcessEntity' muy acoplada (CBO=16) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/persistence/entity/ReservationProcessEntity.java:30`
+- clase 'ReservationController' muy acoplada (CBO=83) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:60`
+- clase 'ReservationDtoMapper' muy acoplada (CBO=13) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/mapper/ReservationDtoMapper.java:17`
+- clase 'UserService' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/service/UserService.java:14`
+- clase 'LoginUserUseCaseImpl' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/usecases/LoginUserUseCaseImpl.java:14`
+- clase 'RegisterUserUseCaseImpl' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/application/usecases/RegisterUserUseCaseImpl.java:16`
+- clase 'JpaUserRepositoryAdapter' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/infrastructure/persistence/adapter/JpaUserRepositoryAdapter.java:17`
+- clase 'JwtAccessTokenIssuerAdapter' muy acoplada (CBO=14) — `src/main/java/com/toneatti/turnos/user/infrastructure/security/JwtAccessTokenIssuerAdapter.java:24`
+- clase 'UserController' muy acoplada (CBO=25) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/controller/UserController.java:28`
+- clase 'UserController' instancia 3 concretos (CBO=25) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/controller/UserController.java:28`
+- clase 'UserDtoMapper' muy acoplada (CBO=8) — `src/main/java/com/toneatti/turnos/user/infrastructure/web/mapper/UserDtoMapper.java:13`
+
+**SRP/responsabilidad** (49)
+- clase 'GetAvailableSlotsUseCaseImpl' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java:38`
+- método 'GetAvailableSlotsUseCaseImpl.generateSlots' con complejidad 6 — `src/main/java/com/toneatti/turnos/availability/application/usecases/GetAvailableSlotsUseCaseImpl.java:78`
+- método 'AvailabilityController.getAvailableSlots' con complejidad 6 — `src/main/java/com/toneatti/turnos/availability/infrastructure/web/controller/AvailabilityController.java:38`
+- método 'Professional.Professional' con 5 parámetros — `src/main/java/com/toneatti/turnos/catalogo/domain/model/Professional.java:3`
+- método 'WeeklySchedule.WeeklySchedule' con 6 parámetros — `src/main/java/com/toneatti/turnos/catalogo/domain/model/WeeklySchedule.java:6`
+- método 'CatalogoProfessionalResponse.CatalogoProfessionalResponse' con 5 parámetros — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoProfessionalResponse.java:3`
+- método 'CatalogoWeeklyScheduleResponse.CatalogoWeeklyScheduleResponse' con 6 parámetros — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoWeeklyScheduleResponse.java:6`
+- clase 'CatedraRequestRejectedException' grande (LOC=28, métodos=3, campos=15) — `src/main/java/com/toneatti/turnos/catedra/domain/exception/CatedraRequestRejectedException.java:7`
+- método 'Appointment.Appointment' con 7 parámetros — `src/main/java/com/toneatti/turnos/catedra/domain/model/Appointment.java:10`
+- método 'AppointmentSummary.AppointmentSummary' con 17 parámetros — `src/main/java/com/toneatti/turnos/catedra/domain/model/AppointmentSummary.java:12`
+- clase 'RestCatedraRepositoryAdapter' grande (LOC=169, métodos=13, campos=9) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:51`
+- clase 'RestCatedraRepositoryAdapter' con baja cohesión (35%) — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:51`
+- método 'RestCatedraRepositoryAdapter.findAppointmentsPage' con 6 parámetros — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:140`
+- método 'RestCatedraRepositoryAdapter.appointmentsPageUri' con 7 parámetros — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:154`
+- método 'RestCatedraRepositoryAdapter.post' con 5 parámetros — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapter.java:186`
+- método 'CatedraAppointmentListResponse.CatedraAppointmentListResponse' con 17 parámetros — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:12`
+- método 'CatedraAppointmentResponse.CatedraAppointmentResponse' con 7 parámetros — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentResponse.java:11`
+- método 'CatedraIntegrationProperties.CatedraIntegrationProperties' de 32 líneas — `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java:23`
+- método 'CatedraIntegrationProperties.Kafka' con 5 parámetros — `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java:45`
+- método 'Kafka.Kafka' con 5 parámetros — `src/main/java/com/toneatti/turnos/config/CatedraIntegrationProperties.java:45`
+- clase 'SecurityConfig' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/config/SecurityConfig.java:31`
+- clase 'ReservationService' con baja cohesión (0%) — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java:24`
+- método 'ReservationService.listReservations' con 6 parámetros — `src/main/java/com/toneatti/turnos/reservation/application/service/ReservationService.java:53`
+- clase 'ApplyAppointmentActionUseCaseImpl' con baja cohesión (17%) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ApplyAppointmentActionUseCaseImpl.java:28`
+- clase 'CancelReservationUseCaseImpl' con baja cohesión (13%) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java:40`
+- método 'CancelReservationUseCaseImpl.cancel' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/CancelReservationUseCaseImpl.java:57`
+- método 'ListReservationsUseCaseImpl.listReservations' con 6 parámetros — `src/main/java/com/toneatti/turnos/reservation/application/usecases/ListReservationsUseCaseImpl.java:28`
+- clase 'StartReservationUseCaseImpl' grande (LOC=197, métodos=11, campos=7) — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:64`
+- método 'StartReservationUseCaseImpl.resume' con complejidad 6 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:104`
+- método 'StartReservationUseCaseImpl.confirm' de 36 líneas — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:169`
+- método 'StartReservationUseCaseImpl.confirm' con complejidad 9 — `src/main/java/com/toneatti/turnos/reservation/application/usecases/StartReservationUseCaseImpl.java:169`
+- método 'PhoneSubmission.PhoneSubmission' con 6 parámetros — `src/main/java/com/toneatti/turnos/reservation/domain/model/PhoneSubmission.java:10`
+- método 'ProcessedAppointmentAction.ProcessedAppointmentAction' con 6 parámetros — `src/main/java/com/toneatti/turnos/reservation/domain/model/ProcessedAppointmentAction.java:8`
+- clase 'ReservationProcess' grande (LOC=219, métodos=36, campos=17) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:24`
+- clase 'ReservationProcess' con baja cohesión (16%) — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:24`
+- método 'ReservationProcess.ReservationProcess' con 17 parámetros — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:44`
+- método 'ReservationProcess.start' con 5 parámetros — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:68`
+- método 'ReservationProcess.apply' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationProcess.java:105`
+- método 'ReservationStatus.nextStatuses' con complejidad 7 — `src/main/java/com/toneatti/turnos/reservation/domain/model/ReservationStatus.java:41`
+- método 'AdditionalInformationSubmittedMessage.AdditionalInformationSubmittedMessage' con 9 parámetros — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/dto/AdditionalInformationSubmittedMessage.java:9`
+- método 'AppointmentActionMessage.AppointmentActionMessage' con 7 parámetros — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/dto/AppointmentActionMessage.java:13`
+- método 'AppointmentActionMessageMapper.toDomain' con complejidad 9 — `src/main/java/com/toneatti/turnos/reservation/infrastructure/kafka/mapper/AppointmentActionMessageMapper.java:23`
+- clase 'ReservationController' grande (LOC=176, métodos=11, campos=4) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:60`
+- clase 'ReservationController' con baja cohesión (20%) — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:60`
+- método 'ReservationController.startReservation' de 33 líneas — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:71`
+- método 'ReservationController.startReservation' con complejidad 10 — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:71`
+- método 'ReservationController.submitPhone' con complejidad 8 — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:150`
+- método 'ReservationController.cancelReservation' con complejidad 8 — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:181`
+- método 'User.User' con 7 parámetros — `src/main/java/com/toneatti/turnos/user/domain/model/User.java:6`
 
 **POO** (1)
-- clase 'CatedraRequestRejectedException' con 13 campos públicos (encapsulación) — `src/main/java/com/toneatti/turnos/catedra/domain/exception/CatedraRequestRejectedException.java`
+- clase 'CatedraRequestRejectedException' con 13 campos públicos (encapsulación) — `src/main/java/com/toneatti/turnos/catedra/domain/exception/CatedraRequestRejectedException.java:7`
 
 **OCP/type-switch** (1)
-- clase 'ReservationController' con 1 type-checks — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java`
+- clase 'ReservationController' con 1 type-checks — `src/main/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationController.java:60`
 
 **ISP/interfaces** (1)
-- interfaz 'AppointmentAction' con 5 métodos — `src/main/java/com/toneatti/turnos/reservation/domain/model/AppointmentAction.java`
+- interfaz 'AppointmentAction' con 6 métodos — `src/main/java/com/toneatti/turnos/reservation/domain/model/AppointmentAction.java:10`
 
 **duplicación** (6)
 - duplicación lógica: 1.4% · boilerplate: 9.4%
-- bloque de 8 líneas repetido 7 veces en src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:332, src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:333, src/test/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationIntegrationTest.java:194 — `src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java`
-- bloque de 8 líneas repetido 3 veces en src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:334, src/test/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationIntegrationTest.java:195, src/test/java/com/toneatti/turnos/reservation/domain/model/ReservationStatusTest.java:20 — `src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java`
-- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:21, src/main/java/com/toneatti/turnos/catedra/domain/model/AppointmentSummary.java:21 — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java`
-- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:20, src/main/java/com/toneatti/turnos/catedra/domain/model/AppointmentSummary.java:20 — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java`
-- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoWeeklyScheduleResponse.java:7, src/main/java/com/toneatti/turnos/catalogo/domain/model/WeeklySchedule.java:7 — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoWeeklyScheduleResponse.java`
+- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoWeeklyScheduleResponse.java:7, src/main/java/com/toneatti/turnos/catalogo/domain/model/WeeklySchedule.java:7 — `src/main/java/com/toneatti/turnos/catalogo/infrastructure/rest/dto/CatalogoWeeklyScheduleResponse.java:7`
+- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:20, src/main/java/com/toneatti/turnos/catedra/domain/model/AppointmentSummary.java:20 — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:20`
+- bloque de 8 líneas repetido 2 veces en src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:21, src/main/java/com/toneatti/turnos/catedra/domain/model/AppointmentSummary.java:21 — `src/main/java/com/toneatti/turnos/catedra/infrastructure/rest/dto/CatedraAppointmentListResponse.java:21`
+- bloque de 8 líneas repetido 7 veces en src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:332, src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:333, src/test/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationIntegrationTest.java:194 — `src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:332`
+- bloque de 8 líneas repetido 3 veces en src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:334, src/test/java/com/toneatti/turnos/reservation/infrastructure/web/controller/ReservationIntegrationTest.java:195, src/test/java/com/toneatti/turnos/reservation/domain/model/ReservationStatusTest.java:20 — `src/test/java/com/toneatti/turnos/catedra/infrastructure/rest/adapter/RestCatedraRepositoryAdapterTest.java:334`
 
 ## 6. Evolución por commit
 
@@ -209,7 +245,7 @@ xychart-beta
     title "Índice de calidad a lo largo de los commits"
     x-axis ["8f6f3b4", "ffb3755", "3735ce3", "f238046", "932ff8c", "1d85a2f", "4dcc5cf", "aace8a4", "7e7c38a", "eedee15"]
     y-axis "Índice" 0 --> 100
-    line [0, 15, 38, 55, 58, 64, 63, 63, 63, 66]
+    line [0, 15, 38, 55, 58, 63, 63, 63, 63, 66]
 ```
 
 | # | Fecha | Commit | Autor | LOC | Índice | %POO | Duplic. | Sueltas |
@@ -219,7 +255,7 @@ xychart-beta
 | 3 | 2026-10-13 | `3735ce3` | LucianoToneatti | 18 | 38 | 56% | 0.0% | 0 |
 | 4 | 2026-10-19 | `f238046` | LucianoToneatti | 911 | 55 | 62% | 7.6% | 0 |
 | 5 | 2026-10-21 | `932ff8c` | LucianoToneatti | 1,815 | 58 | 61% | 5.1% | 0 |
-| 6 | 2026-10-26 | `1d85a2f` | LucianoToneatti | 3,687 | 64 | 63% | 1.4% | 0 |
+| 6 | 2026-10-26 | `1d85a2f` | LucianoToneatti | 3,687 | 63 | 63% | 1.4% | 0 |
 | 7 | 2026-10-29 | `4dcc5cf` | LucianoToneatti | 6,525 | 63 | 67% | 1.8% | 0 |
 | 8 | 2026-10-31 | `aace8a4` | LucianoToneatti | 9,308 | 63 | 68% | 1.4% | 0 |
 | 9 | 2026-11-01 | `7e7c38a` | LucianoToneatti | 11,469 | 63 | 67% | 1.4% | 0 |
